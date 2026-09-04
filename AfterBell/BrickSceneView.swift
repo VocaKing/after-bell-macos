@@ -21,7 +21,7 @@ struct BrickSceneView: NSViewRepresentable {
         view.layer?.isOpaque = false
         view.layer?.backgroundColor = NSColor.clear.cgColor
         view.autoenablesDefaultLighting = false
-        view.antialiasingMode = .multisampling2X
+        view.antialiasingMode = compact ? .multisampling2X : .multisampling4X
         view.allowsCameraControl = false
         view.isPlaying = false
         view.rendersContinuously = false
@@ -73,8 +73,8 @@ struct BrickSceneView: NSViewRepresentable {
             let key = SCNNode()
             key.light = SCNLight()
             key.light?.type = .directional
-            key.light?.intensity = 520
-            key.light?.color = NSColor(calibratedRed: 1, green: 0.97, blue: 0.92, alpha: 1)
+            key.light?.intensity = 680
+            key.light?.color = NSColor(calibratedRed: 1, green: 0.97, blue: 0.94, alpha: 1)
             key.position = SCNVector3(2.4, 2.8, 1.8)
             key.look(at: SCNVector3(0, 0, 0))
             scene.rootNode.addChildNode(key)
@@ -82,7 +82,7 @@ struct BrickSceneView: NSViewRepresentable {
             let fill = SCNNode()
             fill.light = SCNLight()
             fill.light?.type = .omni
-            fill.light?.intensity = 210
+            fill.light?.intensity = 240
             fill.light?.color = NSColor(calibratedRed: 0.78, green: 0.86, blue: 1, alpha: 1)
             fill.position = SCNVector3(-1.8, 0.6, 2.0)
             scene.rootNode.addChildNode(fill)
@@ -91,7 +91,7 @@ struct BrickSceneView: NSViewRepresentable {
                 width: compact ? 1.28 : 1.58,
                 height: compact ? 0.86 : 1.02,
                 length: compact ? 0.92 : 1.12,
-                chamferRadius: compact ? 0.14 : 0.18
+                chamferRadius: compact ? 0.12 : 0.14
             )
             box.chamferSegmentCount = 16
             let brickNode = SCNNode(geometry: box)
@@ -146,25 +146,38 @@ struct BrickSceneView: NSViewRepresentable {
 
         static func bodyMaterial(color: NSColor, highlight: Bool) -> SCNMaterial {
             let mat = SCNMaterial()
-            let body = highlight ? (color.blended(withFraction: 0.08, of: .white) ?? color) : color
+            let body = highlight ? (color.blended(withFraction: 0.10, of: .white) ?? color) : color
             mat.diffuse.contents = body
-            mat.roughness.contents = 0.78
-            mat.metalness.contents = 0.0
-            mat.specular.contents = NSColor(calibratedWhite: 0.08, alpha: 1)
-            mat.shininess = 0.08
-            mat.lightingModel = .lambert
+            mat.roughness.contents = 0.52
+            mat.metalness.contents = 0.03
+            mat.specular.contents = NSColor(calibratedWhite: 0.28, alpha: 1)
+            mat.shininess = 0.22
+            mat.lightingModel = .physicallyBased
+            Self.smoothMap(mat)
             return mat
         }
 
         static func faceMaterial(color: NSColor, code: String, name: String, count: String, compact: Bool) -> SCNMaterial {
             let mat = bodyMaterial(color: color, highlight: false)
             mat.diffuse.contents = paintFace(color: color, code: code, name: name, count: count, compact: compact)
+            Self.smoothMap(mat)
             return mat
         }
 
+        static func smoothMap(_ mat: SCNMaterial) {
+            mat.diffuse.magnificationFilter = .linear
+            mat.diffuse.minificationFilter = .linear
+            mat.diffuse.mipFilter = .linear
+            mat.diffuse.wrapS = .clamp
+            mat.diffuse.wrapT = .clamp
+            mat.diffuse.maxAnisotropy = 16
+        }
+
         static func paintFace(color: NSColor, code: String, name: String, count: String, compact: Bool) -> NSImage {
-            let size = NSSize(width: 1024, height: 720)
+            let size = NSSize(width: 2048, height: 1440)
             return NSImage(size: size, flipped: true) { rect in
+                NSGraphicsContext.current?.shouldAntialias = true
+                NSGraphicsContext.current?.imageInterpolation = .high
                 color.setFill()
                 rect.fill()
                 let paragraph = NSMutableParagraphStyle()
@@ -173,34 +186,34 @@ struct BrickSceneView: NSViewRepresentable {
                 let mute = NSColor(calibratedWhite: 0.14, alpha: 0.70)
                 if compact {
                     (code as NSString).draw(
-                        in: NSRect(x: 40, y: 140, width: 944, height: 440),
+                        in: NSRect(x: 80, y: 280, width: 1888, height: 880),
                         withAttributes: [
-                            .font: NSFont.systemFont(ofSize: 300, weight: .bold),
+                            .font: NSFont.systemFont(ofSize: 600, weight: .bold),
                             .foregroundColor: ink,
                             .paragraphStyle: paragraph,
                         ]
                     )
                 } else {
                     (code as NSString).draw(
-                        in: NSRect(x: 48, y: 70, width: 928, height: 280),
+                        in: NSRect(x: 96, y: 140, width: 1856, height: 560),
                         withAttributes: [
-                            .font: NSFont.systemFont(ofSize: 210, weight: .bold),
+                            .font: NSFont.systemFont(ofSize: 420, weight: .bold),
                             .foregroundColor: ink,
                             .paragraphStyle: paragraph,
                         ]
                     )
                     (name as NSString).draw(
-                        in: NSRect(x: 48, y: 360, width: 928, height: 110),
+                        in: NSRect(x: 96, y: 720, width: 1856, height: 220),
                         withAttributes: [
-                            .font: NSFont.systemFont(ofSize: 78, weight: .semibold),
+                            .font: NSFont.systemFont(ofSize: 156, weight: .semibold),
                             .foregroundColor: ink,
                             .paragraphStyle: paragraph,
                         ]
                     )
                     (count as NSString).draw(
-                        in: NSRect(x: 48, y: 480, width: 928, height: 80),
+                        in: NSRect(x: 96, y: 960, width: 1856, height: 160),
                         withAttributes: [
-                            .font: NSFont.systemFont(ofSize: 52, weight: .medium),
+                            .font: NSFont.systemFont(ofSize: 104, weight: .medium),
                             .foregroundColor: mute,
                             .paragraphStyle: paragraph,
                         ]
