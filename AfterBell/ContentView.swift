@@ -215,19 +215,48 @@ struct MainDesk: View {
 
 struct InquiryRow: View {
     @Environment(HomeworkStore.self) private var store
+    @State private var searchHovered = false
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             TextField("Ask what is due, overdue, or already finished", text: Binding(get: { store.query }, set: { store.query = $0 }))
                 .textFieldStyle(.plain).padding(.horizontal, 16).frame(height: 44)
-                .background { GlassSurface(capsule: true) }
+                .background { GlassSurface(tint: Color.white.opacity(searchHovered ? 0.8 : 0.5), capsule: true) }
+                .scaleEffect(searchHovered ? 1.015 : 1)
+                .shadow(color: Color.white.opacity(searchHovered ? 0.22 : 0.04), radius: searchHovered ? 12 : 3, y: searchHovered ? 4 : 1)
+                .onHover { inside in
+                    searchHovered = inside
+                    HoverCursor.set(inside)
+                }
+                .animation(.easeOut(duration: 0.16), value: searchHovered)
             Text(store.summary()).font(.system(size: 13)).foregroundStyle(AfterBellTheme.muted)
             HStack(spacing: 8) {
                 ForEach(["Due today", "Overdue", "Finished"], id: \.self) { chip in
-                    Button(chip) { store.query = store.query == chip.lowercased() ? "" : chip.lowercased() }
-                        .buttonStyle(GlassChipStyle(on: store.query == chip.lowercased()))
+                    HoverChip(
+                        title: chip,
+                        on: store.query == chip.lowercased()
+                    ) {
+                        store.query = store.query == chip.lowercased() ? "" : chip.lowercased()
+                    }
                 }
             }
         }
+    }
+}
+
+struct HoverChip: View {
+    var title: String
+    var on: Bool
+    var action: () -> Void
+    @State private var hovered = false
+    var body: some View {
+        Button(title, action: action)
+            .buttonStyle(GlassChipStyle(on: on, hovered: hovered))
+            .onHover { inside in
+                hovered = inside
+                HoverCursor.set(inside)
+            }
+            .animation(.easeOut(duration: 0.16), value: hovered)
+            .focusEffectDisabled()
     }
 }
 
@@ -238,25 +267,51 @@ struct WeekStripView: View {
         let counts = store.dayCounts()
         HStack(spacing: 0) {
             ForEach(days, id: \.self) { day in
-                let selected = store.selectedDay == day
-                let isToday = day == store.today
-                Button { store.selectedDay = store.selectedDay == day ? nil : day } label: {
-                    VStack(spacing: 6) {
-                        Text(weekdayLetter(day)).font(.system(size: 11, weight: .medium)).foregroundStyle(AfterBellTheme.muted)
-                        Text("\(Int(day.suffix(2)) ?? 0)")
-                            .font(.system(size: 16, weight: isToday ? .semibold : .regular))
-                            .frame(width: 32, height: 32)
-                            .background(Circle().fill(isToday ? AfterBellTheme.accent : .clear))
-                            .foregroundStyle(isToday ? AfterBellTheme.accentFg : AfterBellTheme.fg)
-                        Circle().fill(AfterBellTheme.fg.opacity((counts[day] ?? 0) > 0 ? 0.55 : 0.12)).frame(width: 4, height: 4)
-                    }
-                    .frame(maxWidth: .infinity).padding(.vertical, 10)
-                    .background(selected ? Color.white.opacity(0.06) : .clear)
-                }.buttonStyle(.plain)
+                WeekDayCell(
+                    day: day,
+                    selected: store.selectedDay == day,
+                    isToday: day == store.today,
+                    hasWork: (counts[day] ?? 0) > 0
+                ) {
+                    store.selectedDay = store.selectedDay == day ? nil : day
+                }
             }
         }
         .padding(6)
         .background { GlassSurface(radius: 18) }
+    }
+}
+
+struct WeekDayCell: View {
+    var day: String
+    var selected: Bool
+    var isToday: Bool
+    var hasWork: Bool
+    var action: () -> Void
+    @State private var hovered = false
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Text(weekdayLetter(day)).font(.system(size: 11, weight: .medium)).foregroundStyle(AfterBellTheme.muted)
+                Text("\(Int(day.suffix(2)) ?? 0)")
+                    .font(.system(size: 16, weight: isToday ? .semibold : .regular))
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(isToday ? AfterBellTheme.accent : (hovered ? Color.white.opacity(0.14) : .clear)))
+                    .foregroundStyle(isToday ? AfterBellTheme.accentFg : AfterBellTheme.fg)
+                Circle().fill(AfterBellTheme.fg.opacity(hasWork ? 0.55 : 0.12)).frame(width: 4, height: 4)
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 10)
+            .background(selected || hovered ? Color.white.opacity(hovered ? 0.10 : 0.06) : .clear)
+            .scaleEffect(hovered ? 1.06 : 1)
+            .offset(y: hovered ? -2 : 0)
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            hovered = inside
+            HoverCursor.set(inside)
+        }
+        .animation(.easeOut(duration: 0.16), value: hovered)
+        .focusEffectDisabled()
     }
 }
 
@@ -294,17 +349,48 @@ struct AssignmentRow: View {
                 }
             }
             Spacer()
-            Button { store.form = .edit(item) } label: {
-                Image(systemName: "pencil").foregroundStyle(AfterBellTheme.muted).frame(width: 28, height: 28)
-            }.buttonStyle(.plain).background { GlassSurface(radius: 8) }
-            Button { store.removeAssignment(item.id) } label: {
-                Image(systemName: "trash").foregroundStyle(AfterBellTheme.muted).frame(width: 28, height: 28)
-            }.buttonStyle(.plain).background { GlassSurface(radius: 8) }
+            HoverIconButton(systemImage: "pencil") { store.form = .edit(item) }
+            HoverIconButton(systemImage: "trash") { store.removeAssignment(item.id) }
         }
         .padding(12)
-        .background { GlassSurface(radius: 16) }
-        .onHover { hovered = $0 }
+        .background { GlassSurface(radius: 16, tint: Color.white.opacity(hovered ? 0.7 : 0.45)) }
+        .scaleEffect(hovered ? 1.012 : 1)
+        .offset(y: hovered ? -2 : 0)
+        .onHover { inside in
+            hovered = inside
+            HoverCursor.set(inside)
+        }
+        .animation(.easeOut(duration: 0.16), value: hovered)
         .opacity(item.isDone ? 0.72 : 1)
+    }
+}
+
+struct HoverIconButton: View {
+    var systemImage: String
+    var action: () -> Void
+    @State private var hovered = false
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .foregroundStyle(hovered ? AfterBellTheme.fg : AfterBellTheme.muted)
+                .frame(width: 28, height: 28)
+        }
+        .buttonStyle(.plain)
+        .background { GlassSurface(radius: 8, tint: Color.white.opacity(hovered ? 0.85 : 0.45)) }
+        .scaleEffect(hovered ? 1.12 : 1)
+        .offset(y: hovered ? -2 : 0)
+        .onHover { inside in
+            hovered = inside
+            HoverCursor.set(inside)
+        }
+        .animation(.easeOut(duration: 0.14), value: hovered)
+        .focusEffectDisabled()
+    }
+}
+
+enum HoverCursor {
+    static func set(_ on: Bool) {
+        if on { NSCursor.pointingHand.push() } else { NSCursor.pop() }
     }
 }
 
@@ -354,13 +440,20 @@ struct GlassActionStyle: ButtonStyle {
 
 struct GlassChipStyle: ButtonStyle {
     var on: Bool
+    var hovered: Bool = false
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(on ? AfterBellTheme.accentFg : AfterBellTheme.fg)
             .padding(.horizontal, 12).padding(.vertical, 7)
             .background {
-                GlassSurface(tint: on ? AfterBellTheme.accent : Color.white.opacity(0.4), capsule: true)
+                GlassSurface(
+                    tint: on ? AfterBellTheme.accent : Color.white.opacity(hovered ? 0.75 : 0.4),
+                    capsule: true
+                )
             }
+            .scaleEffect(configuration.isPressed ? 0.96 : (hovered ? 1.06 : 1))
+            .offset(y: hovered ? -3 : 0)
+            .shadow(color: Color.white.opacity(hovered ? 0.24 : 0.05), radius: hovered ? 10 : 3, y: hovered ? 4 : 1)
     }
 }
