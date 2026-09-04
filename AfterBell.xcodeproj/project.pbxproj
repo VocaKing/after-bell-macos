@@ -1,0 +1,282 @@
+// !$*UTF8*$!
+{
+    archiveVersion = 1;
+    classes = {
+    };
+    objectVersion = 56;
+    objects = {
+
+/* Begin PBXBuildFile section */
+        A10000000000000000000101 /* AfterBellApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000201 /* AfterBellApp.swift */; };
+        A10000000000000000000102 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000202 /* Models.swift */; };
+        A10000000000000000000103 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000203 /* Theme.swift */; };
+        A10000000000000000000104 /* HomeworkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000204 /* HomeworkStore.swift */; };
+        A10000000000000000000105 /* BrickSceneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000205 /* BrickSceneView.swift */; };
+        A10000000000000000000106 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000206 /* ContentView.swift */; };
+        A10000000000000000000107 /* Sheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000207 /* Sheets.swift */; };
+        A10000000000000000000108 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000208 /* Assets.xcassets */; };
+        A10000000000000000000109 /* SceneKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10000000000000000000209 /* SceneKit.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+        A10000000000000000000200 /* AfterBell.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AfterBell.app; sourceTree = BUILT_PRODUCTS_DIR; };
+        A10000000000000000000201 /* AfterBellApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AfterBellApp.swift; sourceTree = "<group>"; };
+        A10000000000000000000202 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+        A10000000000000000000203 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+        A10000000000000000000204 /* HomeworkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeworkStore.swift; sourceTree = "<group>"; };
+        A10000000000000000000205 /* BrickSceneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrickSceneView.swift; sourceTree = "<group>"; };
+        A10000000000000000000206 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+        A10000000000000000000207 /* Sheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sheets.swift; sourceTree = "<group>"; };
+        A10000000000000000000208 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+        A10000000000000000000209 /* SceneKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SceneKit.framework; path = System/Library/Frameworks/SceneKit.framework; sourceTree = SDKROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+        A10000000000000000000301 /* Frameworks */ = {
+            isa = PBXFrameworksBuildPhase;
+            buildActionMask = 2147483647;
+            files = (
+                A10000000000000000000109 /* SceneKit.framework in Frameworks */,
+            );
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+        A10000000000000000000401 = {
+            isa = PBXGroup;
+            children = (
+                A10000000000000000000402 /* AfterBell */,
+                A10000000000000000000403 /* Frameworks */,
+                A10000000000000000000404 /* Products */,
+            );
+            sourceTree = "<group>";
+        };
+        A10000000000000000000402 /* AfterBell */ = {
+            isa = PBXGroup;
+            children = (
+                A10000000000000000000201 /* AfterBellApp.swift */,
+                A10000000000000000000206 /* ContentView.swift */,
+                A10000000000000000000207 /* Sheets.swift */,
+                A10000000000000000000205 /* BrickSceneView.swift */,
+                A10000000000000000000204 /* HomeworkStore.swift */,
+                A10000000000000000000202 /* Models.swift */,
+                A10000000000000000000203 /* Theme.swift */,
+                A10000000000000000000208 /* Assets.xcassets */,
+            );
+            path = AfterBell;
+            sourceTree = "<group>";
+        };
+        A10000000000000000000403 /* Frameworks */ = {
+            isa = PBXGroup;
+            children = (
+                A10000000000000000000209 /* SceneKit.framework */,
+            );
+            name = Frameworks;
+            sourceTree = "<group>";
+        };
+        A10000000000000000000404 /* Products */ = {
+            isa = PBXGroup;
+            children = (
+                A10000000000000000000200 /* AfterBell.app */,
+            );
+            name = Products;
+            sourceTree = "<group>";
+        };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+        A10000000000000000000501 /* AfterBell */ = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = A10000000000000000000703 /* Build configuration list for PBXNativeTarget \"AfterBell\" */;
+            buildPhases = (
+                A10000000000000000000601 /* Sources */,
+                A10000000000000000000301 /* Frameworks */,
+                A10000000000000000000602 /* Resources */,
+            );
+            buildRules = (
+            );
+            dependencies = (
+            );
+            name = AfterBell;
+            productName = AfterBell;
+            productReference = A10000000000000000000200 /* AfterBell.app */;
+            productType = "com.apple.product-type.application";
+        };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+        A10000000000000000000500 /* Project object */ = {
+            isa = PBXProject;
+            attributes = {
+                BuildIndependentTargetsInParallel = 1;
+                LastSwiftUpdateCheck = 1540;
+                LastUpgradeCheck = 1540;
+                TargetAttributes = {
+                    A10000000000000000000501 = {
+                        CreatedOnToolsVersion = 15.4;
+                    };
+                };
+            };
+            buildConfigurationList = A10000000000000000000701 /* Build configuration list for PBXProject \"AfterBell\" */;
+            compatibilityVersion = "Xcode 14.0";
+            developmentRegion = en;
+            hasScannedForEncodings = 0;
+            knownRegions = (
+                en,
+                Base,
+            );
+            mainGroup = A10000000000000000000401;
+            productRefGroup = A10000000000000000000404 /* Products */;
+            projectDirPath = "";
+            projectRoot = "";
+            targets = (
+                A10000000000000000000501 /* AfterBell */,
+            );
+        };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+        A10000000000000000000602 /* Resources */ = {
+            isa = PBXResourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (
+                A10000000000000000000108 /* Assets.xcassets in Resources */,
+            );
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+        A10000000000000000000601 /* Sources */ = {
+            isa = PBXSourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (
+                A10000000000000000000101 /* AfterBellApp.swift in Sources */,
+                A10000000000000000000102 /* Models.swift in Sources */,
+                A10000000000000000000103 /* Theme.swift in Sources */,
+                A10000000000000000000104 /* HomeworkStore.swift in Sources */,
+                A10000000000000000000105 /* BrickSceneView.swift in Sources */,
+                A10000000000000000000106 /* ContentView.swift in Sources */,
+                A10000000000000000000107 /* Sheets.swift in Sources */,
+            );
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+        A10000000000000000000801 /* Debug */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                ALWAYS_SEARCH_USER_PATHS = NO;
+                CLANG_ENABLE_MODULES = YES;
+                CLANG_ENABLE_OBJC_ARC = YES;
+                COPY_PHASE_STRIP = NO;
+                DEBUG_INFORMATION_FORMAT = dwarf;
+                ENABLE_TESTABILITY = YES;
+                GCC_DYNAMIC_NO_PIC = NO;
+                GCC_OPTIMIZATION_LEVEL = 0;
+                MACOSX_DEPLOYMENT_TARGET = 14.0;
+                ONLY_ACTIVE_ARCH = YES;
+                SDKROOT = macosx;
+                SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+                SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+            };
+            name = Debug;
+        };
+        A10000000000000000000802 /* Release */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                ALWAYS_SEARCH_USER_PATHS = NO;
+                CLANG_ENABLE_MODULES = YES;
+                CLANG_ENABLE_OBJC_ARC = YES;
+                COPY_PHASE_STRIP = NO;
+                DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+                MACOSX_DEPLOYMENT_TARGET = 14.0;
+                SDKROOT = macosx;
+                SWIFT_COMPILATION_MODE = wholemodule;
+                SWIFT_OPTIMIZATION_LEVEL = "-O";
+            };
+            name = Release;
+        };
+        A10000000000000000000803 /* Debug */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+                CODE_SIGN_IDENTITY = "-";
+                CODE_SIGN_STYLE = Automatic;
+                COMBINE_HIDPI_IMAGES = YES;
+                CURRENT_PROJECT_VERSION = 1;
+                ENABLE_HARDENED_RUNTIME = NO;
+                GENERATE_INFOPLIST_FILE = YES;
+                INFOPLIST_KEY_CFBundleDisplayName = "After Bell";
+                INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+                INFOPLIST_KEY_NSHighResolutionCapable = YES;
+                INFOPLIST_KEY_NSHumanReadableCopyright = "After Bell";
+                LD_RUNPATH_SEARCH_PATHS = (
+                    "$(inherited)",
+                    "@executable_path/../Frameworks",
+                );
+                MACOSX_DEPLOYMENT_TARGET = 14.0;
+                MARKETING_VERSION = 1.0;
+                PRODUCT_BUNDLE_IDENTIFIER = com.afterbell.macos;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SDKROOT = macosx;
+                SWIFT_EMIT_LOC_STRINGS = YES;
+                SWIFT_VERSION = 5.0;
+            };
+            name = Debug;
+        };
+        A10000000000000000000804 /* Release */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+                CODE_SIGN_IDENTITY = "-";
+                CODE_SIGN_STYLE = Automatic;
+                COMBINE_HIDPI_IMAGES = YES;
+                CURRENT_PROJECT_VERSION = 1;
+                ENABLE_HARDENED_RUNTIME = NO;
+                GENERATE_INFOPLIST_FILE = YES;
+                INFOPLIST_KEY_CFBundleDisplayName = "After Bell";
+                INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+                INFOPLIST_KEY_NSHighResolutionCapable = YES;
+                INFOPLIST_KEY_NSHumanReadableCopyright = "After Bell";
+                LD_RUNPATH_SEARCH_PATHS = (
+                    "$(inherited)",
+                    "@executable_path/../Frameworks",
+                );
+                MACOSX_DEPLOYMENT_TARGET = 14.0;
+                MARKETING_VERSION = 1.0;
+                PRODUCT_BUNDLE_IDENTIFIER = com.afterbell.macos;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SDKROOT = macosx;
+                SWIFT_EMIT_LOC_STRINGS = YES;
+                SWIFT_VERSION = 5.0;
+            };
+            name = Release;
+        };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+        A10000000000000000000701 /* Build configuration list for PBXProject \"AfterBell\" */ = {
+            isa = XCConfigurationList;
+            buildConfigurations = (
+                A10000000000000000000801 /* Debug */,
+                A10000000000000000000802 /* Release */,
+            );
+            defaultConfigurationIsVisible = 0;
+            defaultConfigurationName = Release;
+        };
+        A10000000000000000000703 /* Build configuration list for PBXNativeTarget \"AfterBell\" */ = {
+            isa = XCConfigurationList;
+            buildConfigurations = (
+                A10000000000000000000803 /* Debug */,
+                A10000000000000000000804 /* Release */,
+            );
+            defaultConfigurationIsVisible = 0;
+            defaultConfigurationName = Release;
+        };
+/* End XCConfigurationList section */
+    };
+    rootObject = A10000000000000000000500 /* Project object */;
+}
