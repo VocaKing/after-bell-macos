@@ -44,12 +44,7 @@ struct AtmosphereBackground: View {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-                RadialGradient(
-                    colors: [Color.white.opacity(0.10), .clear],
-                    center: .init(x: 0.78, y: 0.22),
-                    startRadius: 20,
-                    endRadius: 520
-                )
+                RadialGradient(colors: [Color.white.opacity(0.10), .clear], center: .init(x: 0.78, y: 0.22), startRadius: 20, endRadius: 520)
             }
         }
         .ignoresSafeArea()
@@ -62,10 +57,10 @@ struct Sidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(AfterBellTheme.accent)
+                Image(systemName: "cube.fill")
+                    .foregroundStyle(AfterBellTheme.accentFg)
                     .frame(width: 36, height: 36)
-                    .overlay(Image(systemName: "cube.fill").foregroundStyle(AfterBellTheme.accentFg))
+                    .background { GlassSurface(tint: AfterBellTheme.accent, radius: 10) }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("After Bell").font(.system(size: 22, weight: .regular, design: .serif))
                     Text("Homework, remembered").font(.system(size: 11)).foregroundStyle(AfterBellTheme.muted)
@@ -77,19 +72,17 @@ struct Sidebar: View {
             VStack(spacing: 8) {
                 Button { store.form = .add } label: {
                     Label("Add homework", systemImage: "plus").frame(maxWidth: .infinity)
-                }.buttonStyle(AccentButtonStyle())
+                }.buttonStyle(GlassActionStyle(prominent: true))
                 Button { store.sheet = .subjects } label: {
                     Label("Manage subjects", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity)
-                }.buttonStyle(GlassButtonStyle())
+                }.buttonStyle(GlassActionStyle(prominent: false))
                 Button { store.chooseRoomPhoto() } label: {
                     Label(store.roomImage == nil ? "Choose room photo" : "Change room photo", systemImage: "photo")
                         .frame(maxWidth: .infinity)
-                }.buttonStyle(GlassButtonStyle())
+                }.buttonStyle(GlassActionStyle(prominent: false))
                 if store.roomImage != nil {
                     Button("Restore default room") { store.resetRoom() }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(AfterBellTheme.muted)
-                        .frame(maxWidth: .infinity)
+                        .buttonStyle(.plain).foregroundStyle(AfterBellTheme.muted).frame(maxWidth: .infinity)
                 }
             }
         }
@@ -151,7 +144,7 @@ struct MainDesk: View {
                                     hovered: hoveredBrick == subject.id,
                                     selected: store.selectedSubjectId == subject.id
                                 )
-                                .frame(height: 168)
+                                .frame(height: 210)
                                 .onHover { inside in
                                     hoveredBrick = inside ? subject.id : (hoveredBrick == subject.id ? nil : hoveredBrick)
                                 }
@@ -172,9 +165,8 @@ struct MainDesk: View {
                                 Text(subject.name)
                                 Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
                             }
-                            .font(.system(size: 11))
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(AfterBellTheme.raised, in: Capsule())
+                            .font(.system(size: 11)).padding(.horizontal, 8).padding(.vertical, 4)
+                            .background { GlassSurface(tint: AfterBellTheme.accent, capsule: true) }
                         }.buttonStyle(.plain)
                     }
                     Text("\(store.visible.count)").font(.system(size: 11, design: .monospaced)).foregroundStyle(AfterBellTheme.muted)
@@ -185,10 +177,10 @@ struct MainDesk: View {
                         Text("Add the first assignment, or load a sample week from Manage subjects.")
                             .foregroundStyle(AfterBellTheme.muted).multilineTextAlignment(.center)
                         Button { store.form = .add } label: { Label("Add homework", systemImage: "plus") }
-                            .buttonStyle(AccentButtonStyle()).frame(width: 200)
+                            .buttonStyle(GlassActionStyle(prominent: true)).frame(width: 200)
                     }
                     .frame(maxWidth: .infinity).padding(40)
-                    .background(AfterBellTheme.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .background { GlassSurface(radius: 18) }
                 } else {
                     VStack(spacing: 8) {
                         ForEach(store.visible) { item in AssignmentRow(item: item) }
@@ -206,13 +198,12 @@ struct InquiryRow: View {
         VStack(alignment: .leading, spacing: 10) {
             TextField("Ask what is due, overdue, or already finished", text: Binding(get: { store.query }, set: { store.query = $0 }))
                 .textFieldStyle(.plain).padding(.horizontal, 16).frame(height: 44)
-                .background(AfterBellTheme.surface.opacity(0.78), in: Capsule())
-                .overlay(Capsule().stroke(Color.white.opacity(0.08)))
+                .background { GlassSurface(capsule: true) }
             Text(store.summary()).font(.system(size: 13)).foregroundStyle(AfterBellTheme.muted)
             HStack(spacing: 8) {
                 ForEach(["Due today", "Overdue", "Finished"], id: \.self) { chip in
                     Button(chip) { store.query = store.query == chip.lowercased() ? "" : chip.lowercased() }
-                        .buttonStyle(ChipButtonStyle(on: store.query == chip.lowercased()))
+                        .buttonStyle(GlassChipStyle(on: store.query == chip.lowercased()))
                 }
             }
         }
@@ -244,8 +235,7 @@ struct WeekStripView: View {
             }
         }
         .padding(6)
-        .background(AfterBellTheme.surface.opacity(0.78), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.08)))
+        .background { GlassSurface(radius: 18) }
     }
 }
 
@@ -261,15 +251,11 @@ struct AssignmentRow: View {
                     .font(.system(size: 20))
                     .foregroundStyle(item.isDone ? AfterBellTheme.muted : AfterBellTheme.fg)
             }.buttonStyle(.plain)
-            BrickSceneView(
-                color: AfterBellTheme.brickNSColor(subject?.order ?? 0),
+            HomeworkGlyph(
                 code: subject?.code ?? "-",
-                name: subject?.name ?? "",
-                count: "",
-                hovered: hovered,
-                selected: false,
-                compact: true
-            ).frame(width: 72, height: 80)
+                color: AfterBellTheme.brick(subject?.order ?? 0),
+                hovered: hovered
+            )
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title).font(.system(size: 15, weight: .semibold)).strikethrough(item.isDone)
                 HStack(spacing: 6) {
@@ -288,43 +274,44 @@ struct AssignmentRow: View {
             }
             Spacer()
             Button { store.form = .edit(item) } label: {
-                Image(systemName: "pencil").foregroundStyle(AfterBellTheme.muted)
-            }.buttonStyle(.plain)
+                Image(systemName: "pencil").foregroundStyle(AfterBellTheme.muted).frame(width: 28, height: 28)
+            }.buttonStyle(.plain).background { GlassSurface(radius: 8) }
             Button { store.removeAssignment(item.id) } label: {
-                Image(systemName: "trash").foregroundStyle(AfterBellTheme.muted)
-            }.buttonStyle(.plain)
+                Image(systemName: "trash").foregroundStyle(AfterBellTheme.muted).frame(width: 28, height: 28)
+            }.buttonStyle(.plain).background { GlassSurface(radius: 8) }
         }
         .padding(12)
-        .background(AfterBellTheme.surface.opacity(0.78), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.08)))
+        .background { GlassSurface(radius: 16) }
         .onHover { hovered = $0 }
         .opacity(item.isDone ? 0.72 : 1)
     }
 }
 
-struct AccentButtonStyle: ButtonStyle {
+struct GlassActionStyle: ButtonStyle {
+    var prominent: Bool
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.system(size: 13, weight: .medium)).padding(.vertical, 10)
-            .background(AfterBellTheme.accent.opacity(configuration.isPressed ? 0.85 : 1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .foregroundStyle(AfterBellTheme.accentFg)
+        configuration.label
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(prominent ? AfterBellTheme.accentFg : AfterBellTheme.fg)
+            .padding(.vertical, 11)
+            .frame(maxWidth: .infinity)
+            .background {
+                GlassSurface(tint: prominent ? AfterBellTheme.accent : Color.white.opacity(0.55), radius: 12)
+            }
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(configuration.isPressed ? 0.88 : 1)
     }
 }
 
-struct GlassButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.system(size: 13, weight: .medium)).padding(.vertical, 10)
-            .background(Color.white.opacity(configuration.isPressed ? 0.08 : 0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.1)))
-            .foregroundStyle(AfterBellTheme.fg)
-    }
-}
-
-struct ChipButtonStyle: ButtonStyle {
+struct GlassChipStyle: ButtonStyle {
     var on: Bool
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.system(size: 12, weight: .medium))
-            .padding(.horizontal, 12).padding(.vertical, 6)
-            .background(on ? AfterBellTheme.accent : AfterBellTheme.raised, in: Capsule())
+        configuration.label
+            .font(.system(size: 12, weight: .medium))
             .foregroundStyle(on ? AfterBellTheme.accentFg : AfterBellTheme.fg)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background {
+                GlassSurface(tint: on ? AfterBellTheme.accent : Color.white.opacity(0.4), capsule: true)
+            }
     }
 }
