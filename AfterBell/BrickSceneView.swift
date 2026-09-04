@@ -182,6 +182,23 @@ struct BrickSceneView: NSViewRepresentable {
             mat.lightingModel = .physicallyBased
             mat.clearCoat.contents = 0.04
             mat.clearCoatRoughness.contents = 0.72
+            mat.fresnelExponent = 2.6
+            mat.shaderModifiers = [
+                .surface: """
+                float ndotv = max(dot(_surface.normal, _surface.view), 0.0);
+                float fresnel = pow(1.0 - ndotv, 2.7);
+                vec3 n = _surface.normal;
+                float grain = fract(sin(dot(n.xy * 22.0, vec2(12.9898, 78.233))) * 43758.5453);
+                vec3 film = vec3(
+                    0.52 + 0.48 * sin(n.y * 5.2 + n.x * 2.1),
+                    0.48 + 0.42 * sin(n.z * 4.4 + 1.6),
+                    0.68 + 0.32 * sin(n.x * 3.7 + 0.8)
+                );
+                _surface.diffuse.rgb *= (0.93 + 0.07 * grain);
+                _surface.emission = vec4(film * fresnel * 0.08, 0.0);
+                _surface.reflective = vec4(vec3(0.70, 0.78, 0.92) * fresnel * 0.22, 1.0);
+                """
+            ]
             return mat
         }
 
