@@ -21,10 +21,10 @@ struct BrickSceneView: NSViewRepresentable {
         view.layer?.isOpaque = false
         view.layer?.backgroundColor = NSColor.clear.cgColor
         view.autoenablesDefaultLighting = false
-        view.antialiasingMode = .multisampling4X
+        view.antialiasingMode = .multisampling2X
         view.allowsCameraControl = false
-        view.isPlaying = true
-        view.rendersContinuously = true
+        view.isPlaying = false
+        view.rendersContinuously = false
         context.coordinator.build(in: view, compact: compact)
         context.coordinator.apply(
             color: color, code: code, name: name, count: count,
@@ -53,8 +53,6 @@ struct BrickSceneView: NSViewRepresentable {
             camera.fieldOfView = compact ? 28 : 32
             camera.zNear = 0.05
             camera.zFar = 40
-            camera.wantsHDR = true
-            camera.exposureOffset = -0.15
             let camNode = SCNNode()
             camNode.camera = camera
             if compact {
@@ -105,14 +103,8 @@ struct BrickSceneView: NSViewRepresentable {
             box.chamferSegmentCount = 6
             let brickNode = SCNNode(geometry: box)
             brickNode.eulerAngles = restEuler
-            let wrapper = SCNNode()
-            wrapper.addChildNode(brickNode)
-            scene.rootNode.addChildNode(wrapper)
+            scene.rootNode.addChildNode(brickNode)
             brick = brickNode
-
-            let bobUp = SCNAction.moveBy(x: 0, y: 0.03, z: 0, duration: 1.8)
-            bobUp.timingMode = .easeInEaseOut
-            wrapper.runAction(.repeatForever(.sequence([bobUp, bobUp.reversed()])))
 
             let shadow = SCNPlane(width: compact ? 1.5 : 1.85, height: compact ? 1.05 : 1.3)
             let sm = SCNMaterial()
