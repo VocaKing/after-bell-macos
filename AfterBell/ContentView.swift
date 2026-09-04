@@ -17,7 +17,7 @@ struct ContentView: View {
         .background(AfterBellTheme.bg)
         .preferredColorScheme(.dark)
         .sheet(item: Binding(get: { store.sheet }, set: { store.sheet = $0 })) { _ in
-            SubjectsSheet().frame(width: 420, height: 520)
+            SubjectsSheet().frame(width: 460, height: 580)
         }
         .sheet(isPresented: Binding(
             get: { store.form != .closed },
@@ -147,8 +147,9 @@ struct MainDesk: View {
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Subject links").font(.system(size: 11, weight: .medium)).foregroundStyle(AfterBellTheme.muted).textCase(.uppercase)
-                    Text("Hover a brick, then click to open that subject.").font(.system(size: 13)).foregroundStyle(AfterBellTheme.muted)
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 8) {
+                    Text("Hover a brick, then click to open that subject. Add more any time — the grid grows with you.")
+                        .font(.system(size: 13)).foregroundStyle(AfterBellTheme.muted)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 188, maximum: 280), spacing: 12)], spacing: 10) {
                         ForEach(store.sortedSubjects) { subject in
                             let open = store.openCount(for: subject)
                             Button {
@@ -162,13 +163,29 @@ struct MainDesk: View {
                                     hovered: hoveredBrick == subject.id,
                                     selected: store.selectedSubjectId == subject.id
                                 )
-                                .frame(height: 210)
+                                .frame(height: store.sortedSubjects.count > 8 ? 168 : 210)
                                 .onHover { inside in
                                     hoveredBrick = inside ? subject.id : (hoveredBrick == subject.id ? nil : hoveredBrick)
                                 }
                             }
                             .buttonStyle(.plain)
                         }
+                        Button {
+                            store.sheet = .subjects
+                        } label: {
+                            VStack(spacing: 10) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 22, weight: .medium))
+                                Text("Add subject")
+                                    .font(.system(size: 13, weight: .medium))
+                            }
+                            .foregroundStyle(AfterBellTheme.muted)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: store.sortedSubjects.count > 8 ? 168 : 210)
+                            .background { GlassSurface(radius: 22) }
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { inside in HoverCursor.set(inside) }
                     }
                 }
                 InquiryRow()
