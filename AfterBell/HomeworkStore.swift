@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import SwiftUI
 
 @Observable
 final class HomeworkStore {
@@ -31,7 +32,9 @@ final class HomeworkStore {
     }
 
     var today: String { todayISO() }
+
     var sortedSubjects: [Subject] { subjects.sorted { $0.order < $1.order } }
+
     var openCount: Int { assignments.filter { !$0.isDone }.count }
 
     var weekOpen: Int {
@@ -91,7 +94,7 @@ final class HomeworkStore {
 
     func headline() -> String {
         if overdue > 0 { return "A few things are waiting." }
-        if dueToday > 0 { return "Today's list is ready." }
+        if dueToday > 0 { return "Today’s list is ready." }
         return "Nothing urgent on the desk."
     }
 
@@ -101,7 +104,7 @@ final class HomeworkStore {
             return left == 0 ? "\(subject.name) is clear." : "\(left) still open in \(subject.name)."
         }
         if overdue > 0 { return "\(overdue) overdue · \(dueToday) due today." }
-        if dueToday > 0 { return "\(dueToday) due today. You're on it." }
+        if dueToday > 0 { return "\(dueToday) due today. You’re on it." }
         if weekOpen > 0 { return "Clear today. \(weekOpen) still left this week." }
         return "The list is clear. Enjoy the quiet."
     }
@@ -111,7 +114,24 @@ final class HomeworkStore {
         guard !trimmed.isEmpty else { return }
         let taken = subjects.map(\.code)
         let order = (subjects.map(\.order).max() ?? -1) + 1
-        subjects.append(Subject(id: newId("sub"), name: trimmed, code: codeFromName(trimmed, taken: taken), order: order))
+        subjects.append(Subject(
+            id: newId("sub"),
+            name: trimmed,
+            code: codeFromName(trimmed, taken: taken),
+            order: order,
+            fill: AfterBellTheme.brickHex(order)
+        ))
+        save()
+    }
+
+    func setSubjectFill(id: String, color: Color) {
+        let hex = AfterBellTheme.hex(from: color)
+        subjects = subjects.map { item in
+            guard item.id == id else { return item }
+            var next = item
+            next.fill = hex
+            return next
+        }
         save()
     }
 
@@ -148,7 +168,17 @@ final class HomeworkStore {
             editing.priority = priority
             assignments = assignments.map { $0.id == editing.id ? editing : $0 }
         } else {
-            assignments.append(Assignment(id: newId("hw"), subjectId: subjectId, title: title, notes: notes, dueOn: dueOn, priority: priority, completedAt: nil))
+            assignments.append(
+                Assignment(
+                    id: newId("hw"),
+                    subjectId: subjectId,
+                    title: title,
+                    notes: notes,
+                    dueOn: dueOn,
+                    priority: priority,
+                    completedAt: nil
+                )
+            )
         }
         form = .closed
         save()
@@ -211,7 +241,11 @@ final class HomeworkStore {
         let url = dataURL()
         guard let data = try? Data(contentsOf: url),
               let snap = try? JSONDecoder().decode(Snapshot.self, from: data) else { return }
-        subjects = snap.subjects
+        subjects = snap.subjects.map { item in
+            var next = item
+            if next.fill.isEmpty { next.fill = AfterBellTheme.brickHex(next.order) }
+            return next
+        }
         assignments = snap.assignments
     }
 
@@ -228,12 +262,12 @@ final class HomeworkStore {
     }
 
     static let defaultSubjects: [Subject] = [
-        .init(id: "sub-ma", name: "Mathematics", code: "MA", order: 0),
-        .init(id: "sub-en", name: "English", code: "EN", order: 1),
-        .init(id: "sub-sc", name: "Sciences", code: "SC", order: 2),
-        .init(id: "sub-hi", name: "History", code: "HI", order: 3),
-        .init(id: "sub-la", name: "Language", code: "LA", order: 4),
-        .init(id: "sub-el", name: "Elective", code: "EL", order: 5),
+        .init(id: "sub-ma", name: "Mathematics", code: "MA", order: 0, fill: AfterBellTheme.brickHex(0)),
+        .init(id: "sub-en", name: "English", code: "EN", order: 1, fill: AfterBellTheme.brickHex(1)),
+        .init(id: "sub-sc", name: "Sciences", code: "SC", order: 2, fill: AfterBellTheme.brickHex(2)),
+        .init(id: "sub-hi", name: "History", code: "HI", order: 3, fill: AfterBellTheme.brickHex(3)),
+        .init(id: "sub-la", name: "Language", code: "LA", order: 4, fill: AfterBellTheme.brickHex(4)),
+        .init(id: "sub-el", name: "Elective", code: "EL", order: 5, fill: AfterBellTheme.brickHex(5)),
     ]
 
     static func sampleAssignments(subjects: [Subject]) -> [Assignment] {
@@ -242,11 +276,11 @@ final class HomeworkStore {
             subjects.first { $0.code == subject }?.id ?? subject
         }
         return [
-            .init(id: "hw-1", subjectId: id("MA"), title: "Quadratic worksheet 3", notes: "Questions 4-12, show working.", dueOn: addDays(t, -1), priority: .high, completedAt: nil),
+            .init(id: "hw-1", subjectId: id("MA"), title: "Quadratic worksheet 3", notes: "Questions 4–12, show working.", dueOn: addDays(t, -1), priority: .high, completedAt: nil),
             .init(id: "hw-2", subjectId: id("SC"), title: "Lab write-up: titration", notes: "Results table plus one error analysis paragraph.", dueOn: t, priority: .high, completedAt: nil),
             .init(id: "hw-3", subjectId: id("EN"), title: "Chapter 4 reading notes", notes: "Annotate the river scene and bring three quotes.", dueOn: t, priority: .normal, completedAt: nil),
             .init(id: "hw-4", subjectId: id("LA"), title: "Vocab quiz prep", notes: "List 18, oral round tomorrow.", dueOn: addDays(t, 1), priority: .normal, completedAt: nil),
-            .init(id: "hw-5", subjectId: id("HI"), title: "Essay outline - industrial towns", notes: "Thesis plus three body claims.", dueOn: addDays(t, 3), priority: .normal, completedAt: nil),
+            .init(id: "hw-5", subjectId: id("HI"), title: "Essay outline — industrial towns", notes: "Thesis plus three body claims.", dueOn: addDays(t, 3), priority: .normal, completedAt: nil),
             .init(id: "hw-6", subjectId: id("EL"), title: "Practice recording", notes: "Two minutes, no script.", dueOn: addDays(t, 4), priority: .normal, completedAt: nil),
             .init(id: "hw-7", subjectId: id("MA"), title: "Mixed review set B", notes: "Skip the challenge question.", dueOn: addDays(t, -3), priority: .normal, completedAt: addDays(t, -2)),
         ]
