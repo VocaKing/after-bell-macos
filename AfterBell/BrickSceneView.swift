@@ -24,6 +24,7 @@ struct BrickSceneView: NSViewRepresentable {
         view.antialiasingMode = .multisampling4X
         view.allowsCameraControl = false
         view.isPlaying = true
+        view.rendersContinuously = true
         context.coordinator.build(in: view, compact: compact)
         context.coordinator.apply(
             color: color, code: code, name: name, count: count,
@@ -41,66 +42,89 @@ struct BrickSceneView: NSViewRepresentable {
 
     final class Coordinator {
         var brick: SCNNode?
-        var label: SCNNode?
+        var restEuler = SCNVector3(-0.42, 0.55, 0.06)
         var lastKey = ""
-        var bob: SCNAction?
 
         func build(in view: SCNView, compact: Bool) {
-            let scene = view.scene ?? SCNScene()
+            let scene = SCNScene()
             view.scene = scene
 
             let camera = SCNCamera()
-            camera.fieldOfView = compact ? 24 : 26
-            camera.zNear = 0.1
+            camera.fieldOfView = compact ? 28 : 32
+            camera.zNear = 0.05
             camera.zFar = 40
+            camera.wantsHDR = true
+            camera.exposureOffset = -0.15
             let camNode = SCNNode()
             camNode.camera = camera
-            camNode.position = SCNVector3(compact ? 0.68 : 0.5, compact ? 0.34 : 0.24, compact ? 5.4 : 4.2)
-            camNode.look(at: SCNVector3(0.18, 0.03, 0))
+            if compact {
+                camNode.position = SCNVector3(1.05, 0.72, 2.35)
+            } else {
+                camNode.position = SCNVector3(1.35, 0.95, 2.55)
+            }
+            camNode.look(at: SCNVector3(0, 0.02, 0))
             scene.rootNode.addChildNode(camNode)
 
             let ambient = SCNNode()
             ambient.light = SCNLight()
             ambient.light?.type = .ambient
-            ambient.light?.intensity = 420
-            ambient.light?.color = NSColor(white: 0.72, alpha: 1)
+            ambient.light?.intensity = 160
+            ambient.light?.color = NSColor(calibratedWhite: 0.78, alpha: 1)
             scene.rootNode.addChildNode(ambient)
 
             let key = SCNNode()
             key.light = SCNLight()
             key.light?.type = .directional
-            key.light?.intensity = 1100
-            key.light?.color = NSColor(white: 1, alpha: 1)
-            key.position = SCNVector3(1.6, 1.4, 1.1)
+            key.light?.intensity = 980
+            key.light?.color = NSColor(calibratedRed: 1, green: 0.98, blue: 0.94, alpha: 1)
+            key.position = SCNVector3(2.2, 2.4, 1.6)
             key.look(at: SCNVector3(0, 0, 0))
             scene.rootNode.addChildNode(key)
 
             let fill = SCNNode()
             fill.light = SCNLight()
             fill.light?.type = .omni
-            fill.light?.intensity = 550
-            fill.position = SCNVector3(2.2, 1.6, 1.4)
+            fill.light?.intensity = 320
+            fill.light?.color = NSColor(calibratedRed: 0.82, green: 0.88, blue: 1, alpha: 1)
+            fill.position = SCNVector3(-1.6, 0.8, 2.2)
             scene.rootNode.addChildNode(fill)
 
-            let box = SCNBox(width: 1.5, height: 1.08, length: 0.66, chamferRadius: 0.14)
-            box.chamferSegmentCount = 8
+            let rim = SCNNode()
+            rim.light = SCNLight()
+            rim.light?.type = .omni
+            rim.light?.intensity = 240
+            rim.position = SCNVector3(0.2, 1.8, -1.4)
+            scene.rootNode.addChildNode(rim)
+
+            let box = SCNBox(
+                width: compact ? 1.35 : 1.62,
+                height: compact ? 0.92 : 1.12,
+                length: compact ? 0.72 : 0.88,
+                chamferRadius: compact ? 0.07 : 0.08
+            )
+            box.chamferSegmentCount = 6
             let brickNode = SCNNode(geometry: box)
-            brickNode.eulerAngles = SCNVector3(-0.3, 0.4, 0)
-            scene.rootNode.addChildNode(brickNode)
+            brickNode.eulerAngles = restEuler
+            let wrapper = SCNNode()
+            wrapper.addChildNode(brickNode)
+            scene.rootNode.addChildNode(wrapper)
             brick = brickNode
 
-            let plane = SCNPlane(width: compact ? 1.05 : 1.18, height: compact ? 0.72 : 0.88)
-            plane.cornerRadius = 0.04
-            let labelNode = SCNNode(geometry: plane)
-            labelNode.position = SCNVector3(0, compact ? 0 : 0.02, 0.338)
-            labelNode.renderingOrder = 2
-            brickNode.addChildNode(labelNode)
-            label = labelNode
-
-            let bobUp = SCNAction.moveBy(x: 0, y: 0.04, z: 0, duration: 1.7)
+            let bobUp = SCNAction.moveBy(x: 0, y: 0.03, z: 0, duration: 1.8)
             bobUp.timingMode = .easeInEaseOut
-            let bobDown = bobUp.reversed()
-            brickNode.runAction(.repeatForever(.sequence([bobUp, bobDown])))
+            wrapper.runAction(.repeatForever(.sequence([bobUp, bobUp.reversed()])))
+
+            let shadow = SCNPlane(width: compact ? 1.5 : 1.85, height: compact ? 1.05 : 1.3)
+            let sm = SCNMaterial()
+            sm.diffuse.contents = NSColor.black
+            sm.transparency = 0.22
+            sm.lightingModel = .constant
+            sm.writesToDepthBuffer = false
+            shadow.materials = [sm]
+            let shadowNode = SCNNode(geometry: shadow)
+            shadowNode.eulerAngles.x = -.pi / 2
+            shadowNode.position = SCNVector3(0.08, compact ? -0.52 : -0.64, 0.06)
+            scene.rootNode.addChildNode(shadowNode)
         }
 
         func apply(
@@ -112,78 +136,121 @@ struct BrickSceneView: NSViewRepresentable {
             selected: Bool,
             compact: Bool
         ) {
-            guard let brick, let label else { return }
-            let mat = SCNMaterial()
-            mat.diffuse.contents = color
-            mat.roughness.contents = 0.28
-            mat.metalness.contents = 0.06
-            mat.lightingModel = .physicallyBased
-            brick.geometry?.materials = [mat]
-
-            let key = "\(code)|\(name)|\(count)|\(compact)"
-            if key != lastKey, let geom = label.geometry as? SCNPlane {
+            guard let brick else { return }
+            let rgb = color.usingColorSpace(.deviceRGB) ?? color
+            let key = "\(code)|\(name)|\(count)|\(compact)|\(rgb.redComponent)|\(rgb.greenComponent)|\(rgb.blueComponent)"
+            if key != lastKey, let box = brick.geometry as? SCNBox {
                 lastKey = key
-                let image = Self.makeLabel(code: code, name: name, count: count, compact: compact)
-                let lm = SCNMaterial()
-                lm.diffuse.contents = image
-                lm.transparent.contents = image
-                lm.lightingModel = .constant
-                lm.isDoubleSided = true
-                lm.writesToDepthBuffer = false
-                geom.materials = [lm]
+                let painted = rgb
+                let front = Self.faceMaterial(color: painted, code: code, name: name, count: count, compact: compact)
+                let side = Self.bodyMaterial(color: painted, highlight: false)
+                let top = Self.bodyMaterial(color: painted, highlight: true)
+                box.materials = [front, side, side, side, top, side]
             }
 
+            let lift: CGFloat = hovered ? (compact ? 0.12 : 0.18) : (selected ? 0.08 : 0)
             SCNTransaction.begin()
             SCNTransaction.animationDuration = 0.18
-            brick.position.y = hovered ? (compact ? 0.12 : 0.16) : (selected ? 0.09 : 0)
+            brick.position.y = lift
             brick.eulerAngles = SCNVector3(
-                hovered ? -0.24 : -0.3,
-                hovered ? 0.34 : 0.4,
-                0
+                restEuler.x + (hovered ? 0.08 : 0),
+                restEuler.y - (hovered ? 0.08 : 0),
+                restEuler.z
             )
             SCNTransaction.commit()
         }
 
-        static func makeLabel(code: String, name: String, count: String, compact: Bool) -> NSImage {
-            let size = NSSize(width: 1024, height: 768)
-            return NSImage(size: size, flipped: true) { rect in
-                NSColor.clear.setFill()
-                rect.fill()
-                let paragraph = NSMutableParagraphStyle()
-                paragraph.alignment = .center
-                let ink = NSColor(calibratedWhite: 0.1, alpha: 0.92)
-                if compact {
-                    let attrs: [NSAttributedString.Key: Any] = [
-                        .font: NSFont.systemFont(ofSize: 280, weight: .bold),
-                        .foregroundColor: ink,
-                        .paragraphStyle: paragraph,
-                    ]
-                    (code as NSString).draw(
-                        in: NSRect(x: 40, y: 180, width: 944, height: 420),
-                        withAttributes: attrs
-                    )
-                } else {
-                    let codeAttrs: [NSAttributedString.Key: Any] = [
-                        .font: NSFont.systemFont(ofSize: 188, weight: .bold),
-                        .foregroundColor: ink,
-                        .paragraphStyle: paragraph,
-                    ]
-                    let nameAttrs: [NSAttributedString.Key: Any] = [
-                        .font: NSFont.systemFont(ofSize: 72, weight: .semibold),
-                        .foregroundColor: ink,
-                        .paragraphStyle: paragraph,
-                    ]
-                    let countAttrs: [NSAttributedString.Key: Any] = [
-                        .font: NSFont.systemFont(ofSize: 50, weight: .medium),
-                        .foregroundColor: NSColor(calibratedWhite: 0.25, alpha: 0.9),
-                        .paragraphStyle: paragraph,
-                    ]
-                    (code as NSString).draw(in: NSRect(x: 50, y: 160, width: 924, height: 240), withAttributes: codeAttrs)
-                    (name as NSString).draw(in: NSRect(x: 50, y: 400, width: 924, height: 110), withAttributes: nameAttrs)
-                    (count as NSString).draw(in: NSRect(x: 50, y: 510, width: 924, height: 80), withAttributes: countAttrs)
-                }
-                return true
+        static func bodyMaterial(color: NSColor, highlight: Bool) -> SCNMaterial {
+            let mat = SCNMaterial()
+            let body = highlight ? color.blended(withFraction: 0.14, of: .white) ?? color : color
+            mat.diffuse.contents = body
+            mat.roughness.contents = 0.22
+            mat.metalness.contents = 0.12
+            mat.specular.contents = NSColor.white
+            mat.lightingModel = .physicallyBased
+            return mat
+        }
+
+        static func faceMaterial(color: NSColor, code: String, name: String, count: String, compact: Bool) -> SCNMaterial {
+            let mat = bodyMaterial(color: color, highlight: false)
+            mat.diffuse.contents = paintFace(color: color, code: code, name: name, count: count, compact: compact)
+            mat.lightingModel = .physicallyBased
+            mat.roughness.contents = 0.18
+            return mat
+        }
+
+        static func paintFace(color: NSColor, code: String, name: String, count: String, compact: Bool) -> NSImage {
+            let width = 1024
+            let height = 768
+            guard let rep = NSBitmapImageRep(
+                bitmapDataPlanes: nil,
+                pixelsWide: width,
+                pixelsHigh: height,
+                bitsPerSample: 8,
+                samplesPerPixel: 4,
+                hasAlpha: true,
+                isPlanar: false,
+                colorSpaceName: .deviceRGB,
+                bytesPerRow: 0,
+                bitsPerPixel: 0
+            ) else {
+                return NSImage(size: NSSize(width: width, height: height))
             }
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+            color.setFill()
+            NSRect(x: 0, y: 0, width: width, height: height).fill()
+            NSGradient(colors: [
+                color.blended(withFraction: 0.22, of: .white) ?? color,
+                color,
+                color.blended(withFraction: 0.08, of: .black) ?? color,
+            ])?.draw(
+                in: NSRect(x: 0, y: 0, width: width, height: height),
+                angle: 118
+            )
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.alignment = .center
+            let ink = NSColor(calibratedWhite: 0.12, alpha: 0.9)
+            let mute = NSColor(calibratedWhite: 0.16, alpha: 0.72)
+            if compact {
+                (code as NSString).draw(
+                    in: NSRect(x: 40, y: 170, width: 944, height: 430),
+                    withAttributes: [
+                        .font: NSFont.systemFont(ofSize: 300, weight: .bold),
+                        .foregroundColor: ink,
+                        .paragraphStyle: paragraph,
+                    ]
+                )
+            } else {
+                (code as NSString).draw(
+                    in: NSRect(x: 48, y: 150, width: 928, height: 250),
+                    withAttributes: [
+                        .font: NSFont.systemFont(ofSize: 210, weight: .bold),
+                        .foregroundColor: ink,
+                        .paragraphStyle: paragraph,
+                    ]
+                )
+                (name as NSString).draw(
+                    in: NSRect(x: 48, y: 400, width: 928, height: 110),
+                    withAttributes: [
+                        .font: NSFont.systemFont(ofSize: 78, weight: .semibold),
+                        .foregroundColor: ink,
+                        .paragraphStyle: paragraph,
+                    ]
+                )
+                (count as NSString).draw(
+                    in: NSRect(x: 48, y: 512, width: 928, height: 80),
+                    withAttributes: [
+                        .font: NSFont.systemFont(ofSize: 52, weight: .medium),
+                        .foregroundColor: mute,
+                        .paragraphStyle: paragraph,
+                    ]
+                )
+            }
+            NSGraphicsContext.restoreGraphicsState()
+            let image = NSImage(size: NSSize(width: width, height: height))
+            image.addRepresentation(rep)
+            return image
         }
     }
 }
