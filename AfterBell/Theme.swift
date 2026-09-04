@@ -12,19 +12,54 @@ enum AfterBellTheme {
     static let warn = Color(red: 196 / 255, green: 180 / 255, blue: 154 / 255)
 
     static func brick(_ order: Int) -> Color {
-        let palette: [Color] = [
-            Color(red: 0.46, green: 0.78, blue: 0.64),
-            Color(red: 0.92, green: 0.72, blue: 0.34),
-            Color(red: 0.46, green: 0.64, blue: 0.86),
-            Color(red: 0.88, green: 0.52, blue: 0.54),
-            Color(red: 0.90, green: 0.80, blue: 0.48),
-            Color(red: 0.82, green: 0.76, blue: 0.64),
-        ]
-        return palette[abs(order) % palette.count]
+        palette[abs(order) % palette.count]
+    }
+
+    static func brick(_ subject: Subject) -> Color {
+        color(hex: subject.fill) ?? brick(subject.order)
     }
 
     static func brickNSColor(_ order: Int) -> NSColor {
         NSColor(brick(order))
+    }
+
+    static func brickNSColor(_ subject: Subject) -> NSColor {
+        NSColor(brick(subject))
+    }
+
+    static let palette: [Color] = [
+        Color(red: 0.46, green: 0.78, blue: 0.64),
+        Color(red: 0.92, green: 0.72, blue: 0.34),
+        Color(red: 0.46, green: 0.64, blue: 0.86),
+        Color(red: 0.88, green: 0.52, blue: 0.54),
+        Color(red: 0.90, green: 0.80, blue: 0.48),
+        Color(red: 0.82, green: 0.76, blue: 0.64),
+        Color(red: 0.72, green: 0.58, blue: 0.86),
+        Color(red: 0.94, green: 0.62, blue: 0.42),
+        Color(red: 0.40, green: 0.72, blue: 0.78),
+        Color(red: 0.96, green: 0.74, blue: 0.78),
+    ]
+
+    static func brickHex(_ order: Int) -> String {
+        hex(from: brick(order))
+    }
+
+    static func color(hex: String) -> Color? {
+        var h = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if h.hasPrefix("#") { h.removeFirst() }
+        guard h.count == 6, let value = UInt32(h, radix: 16) else { return nil }
+        let r = Double((value >> 16) & 0xFF) / 255
+        let g = Double((value >> 8) & 0xFF) / 255
+        let b = Double(value & 0xFF) / 255
+        return Color(red: r, green: g, blue: b)
+    }
+
+    static func hex(from color: Color) -> String {
+        let ns = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
+        let r = Int((ns.redComponent * 255).rounded())
+        let g = Int((ns.greenComponent * 255).rounded())
+        let b = Int((ns.blueComponent * 255).rounded())
+        return String(format: "#%02X%02X%02X", max(0, min(r, 255)), max(0, min(g, 255)), max(0, min(b, 255)))
     }
 }
 
