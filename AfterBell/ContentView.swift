@@ -353,7 +353,7 @@ struct AssignmentRow: View {
             HoverIconButton(systemImage: "trash") { store.removeAssignment(item.id) }
         }
         .padding(12)
-        .background { GlassSurface(radius: 16, tint: Color.white.opacity(hovered ? 0.7 : 0.45)) }
+        .background { GlassSurface(tint: Color.white.opacity(hovered ? 0.7 : 0.45), radius: 16) }
         .scaleEffect(hovered ? 1.012 : 1)
         .offset(y: hovered ? -2 : 0)
         .onHover { inside in
@@ -376,7 +376,7 @@ struct HoverIconButton: View {
                 .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
-        .background { GlassSurface(radius: 8, tint: Color.white.opacity(hovered ? 0.85 : 0.45)) }
+        .background { GlassSurface(tint: Color.white.opacity(hovered ? 0.85 : 0.45), radius: 8) }
         .scaleEffect(hovered ? 1.12 : 1)
         .offset(y: hovered ? -2 : 0)
         .onHover { inside in
