@@ -144,8 +144,8 @@ struct HomeworkGlyph: View {
 
     var body: some View {
         Text(code)
-            .font(.custom("Didot-Bold", size: 22))
-            .tracking(1.2)
+            .font(.custom("MarkerFelt-Wide", size: 21))
+            .tracking(0.6)
             .foregroundStyle(Color(red: 0.10, green: 0.10, blue: 0.12))
             .frame(width: 52, height: 52)
             .background { GlassSurface(tint: color, radius: 16) }
