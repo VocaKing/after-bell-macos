@@ -18,8 +18,8 @@ struct BrickSceneView: NSViewRepresentable {
         view.scene = SCNScene()
         view.backgroundColor = .clear
         view.wantsLayer = true
+        view.layer?.isOpaque = false
         view.layer?.backgroundColor = NSColor.clear.cgColor
-        view.isOpaque = false
         view.autoenablesDefaultLighting = false
         view.antialiasingMode = .multisampling4X
         view.allowsCameraControl = false
