@@ -48,7 +48,7 @@ struct BrickSceneView: NSViewRepresentable {
             let scene = SCNScene()
             view.scene = scene
             scene.lightingEnvironment.contents = Self.studioIBL()
-            scene.lightingEnvironment.intensity = 0.42
+            scene.lightingEnvironment.intensity = 0.22
 
             let camera = SCNCamera()
             camera.fieldOfView = compact ? 34 : 35
@@ -66,14 +66,14 @@ struct BrickSceneView: NSViewRepresentable {
             let ambient = SCNNode()
             ambient.light = SCNLight()
             ambient.light?.type = .ambient
-            ambient.light?.intensity = 105
-            ambient.light?.color = NSColor(calibratedWhite: 0.48, alpha: 1)
+            ambient.light?.intensity = 70
+            ambient.light?.color = NSColor(calibratedWhite: 0.38, alpha: 1)
             scene.rootNode.addChildNode(ambient)
 
             let key = SCNNode()
             key.light = SCNLight()
             key.light?.type = .directional
-            key.light?.intensity = 300
+            key.light?.intensity = 170
             key.light?.color = NSColor(calibratedRed: 1.00, green: 0.97, blue: 0.93, alpha: 1)
             key.position = SCNVector3(1.2, 3.0, 1.6)
             key.look(at: SCNVector3(0, 0, 0))
@@ -82,7 +82,7 @@ struct BrickSceneView: NSViewRepresentable {
             let bounce = SCNNode()
             bounce.light = SCNLight()
             bounce.light?.type = .omni
-            bounce.light?.intensity = 55
+            bounce.light?.intensity = 28
             bounce.light?.color = NSColor(calibratedRed: 0.90, green: 0.88, blue: 0.84, alpha: 1)
             bounce.position = SCNVector3(0.2, -1.4, 1.2)
             scene.rootNode.addChildNode(bounce)
@@ -90,7 +90,7 @@ struct BrickSceneView: NSViewRepresentable {
             let rim = SCNNode()
             rim.light = SCNLight()
             rim.light?.type = .directional
-            rim.light?.intensity = 85
+            rim.light?.intensity = 40
             rim.light?.color = NSColor(calibratedRed: 0.78, green: 0.84, blue: 0.94, alpha: 1)
             rim.position = SCNVector3(-2.2, 1.4, -1.4)
             rim.look(at: SCNVector3(0, 0, 0))
@@ -175,13 +175,13 @@ struct BrickSceneView: NSViewRepresentable {
             mat.diffuse.contents = color
             mat.ambient.contents = color
             mat.locksAmbientWithDiffuse = true
-            mat.roughness.contents = 0.48
-            mat.metalness.contents = 0.012
-            mat.specular.contents = NSColor(calibratedWhite: 0.14, alpha: 1)
-            mat.shininess = 0.14
+            mat.roughness.contents = 0.58
+            mat.metalness.contents = 0.0
+            mat.specular.contents = NSColor(calibratedWhite: 0.08, alpha: 1)
+            mat.shininess = 0.08
             mat.lightingModel = .physicallyBased
-            mat.clearCoat.contents = 0.10
-            mat.clearCoatRoughness.contents = 0.58
+            mat.clearCoat.contents = 0.04
+            mat.clearCoatRoughness.contents = 0.72
             return mat
         }
 
@@ -202,7 +202,7 @@ struct BrickSceneView: NSViewRepresentable {
                 paragraph.alignment = .center
                 let ink = NSColor(calibratedWhite: 0.11, alpha: 0.90)
                 let mute = NSColor(calibratedWhite: 0.12, alpha: 0.58)
-                let monogram = Self.displayFont(size: compact ? 520 : 400)
+                let monogram = Self.displayFont(size: compact ? 500 : 390)
                 if compact {
                     (code as NSString).draw(
                         in: NSRect(x: 80, y: 240, width: 1888, height: 800),
@@ -210,7 +210,7 @@ struct BrickSceneView: NSViewRepresentable {
                             .font: monogram,
                             .foregroundColor: ink,
                             .paragraphStyle: paragraph,
-                            .kern: 18,
+                            .kern: 6,
                         ]
                     )
                 } else {
@@ -220,7 +220,7 @@ struct BrickSceneView: NSViewRepresentable {
                             .font: monogram,
                             .foregroundColor: ink,
                             .paragraphStyle: paragraph,
-                            .kern: 16,
+                            .kern: 4,
                         ]
                     )
                     (name as NSString).draw(
@@ -245,9 +245,9 @@ struct BrickSceneView: NSViewRepresentable {
         }
 
         static func displayFont(size: CGFloat) -> NSFont {
-            NSFont(name: "Didot-Bold", size: size)
-                ?? NSFont(name: "BodoniSvtyTwoITCTT-Bold", size: size)
-                ?? NSFont(name: "NewYork-Black", size: size)
+            NSFont(name: "MarkerFelt-Wide", size: size)
+                ?? NSFont(name: "Noteworthy-Bold", size: size)
+                ?? NSFont(name: "ChalkboardSE-Bold", size: size)
                 ?? NSFont.systemFont(ofSize: size, weight: .bold)
         }
 
