@@ -51,16 +51,16 @@ struct BrickSceneView: NSViewRepresentable {
             scene.lightingEnvironment.intensity = 0.42
 
             let camera = SCNCamera()
-            camera.fieldOfView = compact ? 32 : 33
+            camera.fieldOfView = compact ? 34 : 35
             camera.zNear = 0.05
             camera.zFar = 40
             camera.wantsHDR = false
             let camNode = SCNNode()
             camNode.camera = camera
             camNode.position = compact
-                ? SCNVector3(1.70, 1.28, 1.85)
-                : SCNVector3(1.95, 1.48, 2.05)
-            camNode.look(at: SCNVector3(0, -0.02, 0))
+                ? SCNVector3(0.28, 0.52, 2.15)
+                : SCNVector3(0.34, 0.62, 2.48)
+            camNode.look(at: SCNVector3(0, 0, 0))
             scene.rootNode.addChildNode(camNode)
 
             let ambient = SCNNode()
@@ -144,8 +144,8 @@ struct BrickSceneView: NSViewRepresentable {
             SCNTransaction.animationDuration = 0.18
             brick.position.y = lift
             brick.eulerAngles = SCNVector3(
-                hovered ? -0.06 : 0,
-                hovered ? -0.08 : 0,
+                hovered ? -0.04 : 0,
+                hovered ? 0.05 : 0,
                 0
             )
             SCNTransaction.commit()
