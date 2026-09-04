@@ -33,6 +33,18 @@ struct GlassSurface: View {
     var radius: CGFloat = 14
     var capsule: Bool = false
 
+    init(tint: Color = Color.white, radius: CGFloat = 14, capsule: Bool = false) {
+        self.tint = tint
+        self.radius = radius
+        self.capsule = capsule
+    }
+
+    init(radius: CGFloat, tint: Color, capsule: Bool = false) {
+        self.tint = tint
+        self.radius = radius
+        self.capsule = capsule
+    }
+
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: capsule ? 999 : radius, style: .continuous)
         ZStack {
