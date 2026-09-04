@@ -30,21 +30,33 @@ struct ContentView: View {
 struct AtmosphereBackground: View {
     var image: NSImage?
     var body: some View {
-        ZStack {
-            AfterBellTheme.bg
-            if let image {
-                Image(nsImage: image).resizable().scaledToFill().overlay(Color.black.opacity(0.35))
-            } else {
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.12, green: 0.12, blue: 0.14),
-                        Color(red: 0.06, green: 0.05, blue: 0.04),
-                        Color(red: 0.10, green: 0.09, blue: 0.07),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                RadialGradient(colors: [Color.white.opacity(0.10), .clear], center: .init(x: 0.78, y: 0.22), startRadius: 20, endRadius: 520)
+        GeometryReader { geo in
+            ZStack {
+                AfterBellTheme.bg
+                if let image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .overlay(Color.black.opacity(0.28))
+                } else {
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.12, green: 0.12, blue: 0.14),
+                            Color(red: 0.06, green: 0.05, blue: 0.04),
+                            Color(red: 0.10, green: 0.09, blue: 0.07),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    RadialGradient(
+                        colors: [Color.white.opacity(0.10), .clear],
+                        center: .init(x: 0.78, y: 0.22),
+                        startRadius: 20,
+                        endRadius: 520
+                    )
+                }
             }
         }
         .ignoresSafeArea()
@@ -72,14 +84,20 @@ struct Sidebar: View {
             VStack(spacing: 8) {
                 Button { store.form = .add } label: {
                     Label("Add homework", systemImage: "plus").frame(maxWidth: .infinity)
-                }.buttonStyle(GlassActionStyle(prominent: true))
+                }
+                .buttonStyle(GlassActionStyle(prominent: true))
+                .focusEffectDisabled()
                 Button { store.sheet = .subjects } label: {
                     Label("Manage subjects", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity)
-                }.buttonStyle(GlassActionStyle(prominent: false))
+                }
+                .buttonStyle(GlassActionStyle(prominent: false))
+                .focusEffectDisabled()
                 Button { store.chooseRoomPhoto() } label: {
                     Label(store.roomImage == nil ? "Choose room photo" : "Change room photo", systemImage: "photo")
                         .frame(maxWidth: .infinity)
-                }.buttonStyle(GlassActionStyle(prominent: false))
+                }
+                .buttonStyle(GlassActionStyle(prominent: false))
+                .focusEffectDisabled()
                 if store.roomImage != nil {
                     Button("Restore default room") { store.resetRoom() }
                         .buttonStyle(.plain).foregroundStyle(AfterBellTheme.muted).frame(maxWidth: .infinity)
@@ -88,7 +106,7 @@ struct Sidebar: View {
         }
         .padding(20)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(.ultraThinMaterial.opacity(0.55))
+        .background(.ultraThinMaterial.opacity(0.72))
     }
 }
 
@@ -177,7 +195,9 @@ struct MainDesk: View {
                         Text("Add the first assignment, or load a sample week from Manage subjects.")
                             .foregroundStyle(AfterBellTheme.muted).multilineTextAlignment(.center)
                         Button { store.form = .add } label: { Label("Add homework", systemImage: "plus") }
-                            .buttonStyle(GlassActionStyle(prominent: true)).frame(width: 200)
+                            .buttonStyle(GlassActionStyle(prominent: true))
+                            .focusEffectDisabled()
+                            .frame(width: 200)
                     }
                     .frame(maxWidth: .infinity).padding(40)
                     .background { GlassSurface(radius: 18) }
