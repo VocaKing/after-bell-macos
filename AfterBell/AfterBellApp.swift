@@ -9,6 +9,11 @@ struct AfterBellApp: App {
             ContentView()
                 .environment(store)
                 .frame(minWidth: 1080, minHeight: 720)
+                .onAppear {
+                    DispatchQueue.main.async {
+                        NSApp.keyWindow?.makeFirstResponder(nil)
+                    }
+                }
         }
         .windowStyle(.automatic)
         .defaultSize(width: 1280, height: 820)
