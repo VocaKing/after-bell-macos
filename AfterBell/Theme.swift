@@ -13,12 +13,12 @@ enum AfterBellTheme {
 
     static func brick(_ order: Int) -> Color {
         let palette: [Color] = [
-            Color(red: 0.58, green: 0.81, blue: 0.70),
-            Color(red: 0.90, green: 0.76, blue: 0.46),
-            Color(red: 0.56, green: 0.70, blue: 0.86),
-            Color(red: 0.88, green: 0.62, blue: 0.62),
-            Color(red: 0.91, green: 0.84, blue: 0.64),
-            Color(red: 0.86, green: 0.82, blue: 0.74),
+            Color(red: 0.46, green: 0.78, blue: 0.64),
+            Color(red: 0.92, green: 0.72, blue: 0.34),
+            Color(red: 0.46, green: 0.64, blue: 0.86),
+            Color(red: 0.88, green: 0.52, blue: 0.54),
+            Color(red: 0.90, green: 0.80, blue: 0.48),
+            Color(red: 0.82, green: 0.76, blue: 0.64),
         ]
         return palette[abs(order) % palette.count]
     }
@@ -28,36 +28,55 @@ enum AfterBellTheme {
     }
 }
 
+struct GlassSurface: View {
+    var tint: Color = Color.white
+    var radius: CGFloat = 14
+    var capsule: Bool = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: capsule ? 999 : radius, style: .continuous)
+        ZStack {
+            shape.fill(.ultraThinMaterial)
+            shape.fill(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.42),
+                        tint.opacity(0.28),
+                        Color.white.opacity(0.06),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            shape.strokeBorder(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.82), Color.white.opacity(0.14)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 1.2
+            )
+            Ellipse()
+                .fill(Color.white.opacity(0.38))
+                .frame(height: 16)
+                .offset(y: -22)
+                .blur(radius: 7)
+                .mask(shape)
+        }
+        .shadow(color: tint.opacity(0.28), radius: 14, y: 8)
+    }
+}
+
 struct LiquidGlass: ViewModifier {
     var tint: Color? = nil
     var radius: CGFloat = 14
     var capsule: Bool = false
 
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            if capsule {
-                content.glassEffect(glass, in: Capsule())
-            } else {
-                content.glassEffect(glass, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+        content
+            .background {
+                GlassSurface(tint: tint ?? Color.white, radius: radius, capsule: capsule)
             }
-        } else if capsule {
-            content
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().stroke(Color.white.opacity(0.22), lineWidth: 1))
-        } else {
-            let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-            content
-                .background(.ultraThinMaterial, in: shape)
-                .overlay(shape.stroke(Color.white.opacity(0.22), lineWidth: 1))
-        }
-    }
-
-    @available(macOS 26.0, *)
-    private var glass: Glass {
-        if let tint {
-            return .regular.tint(tint).interactive()
-        }
-        return .regular.interactive()
     }
 }
 
@@ -79,12 +98,11 @@ struct HomeworkGlyph: View {
     var body: some View {
         Text(code)
             .font(.system(size: 15, weight: .bold, design: .rounded))
-            .foregroundStyle(AfterBellTheme.accentFg)
-            .frame(width: 50, height: 50)
-            .liquidGlass(radius: 14, tint: color)
+            .foregroundStyle(Color(red: 0.10, green: 0.10, blue: 0.12))
+            .frame(width: 52, height: 52)
+            .background { GlassSurface(tint: color, radius: 16) }
             .scaleEffect(hovered ? 1.08 : 1)
-            .offset(y: hovered ? -3 : 0)
-            .shadow(color: color.opacity(hovered ? 0.45 : 0.22), radius: hovered ? 12 : 6, y: 4)
+            .offset(y: hovered ? -4 : 0)
             .animation(.easeOut(duration: 0.16), value: hovered)
     }
 }
