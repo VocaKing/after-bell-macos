@@ -180,23 +180,24 @@ struct BrickSceneView: NSViewRepresentable {
             mat.specular.contents = NSColor(calibratedWhite: 0.08, alpha: 1)
             mat.shininess = 0.08
             mat.lightingModel = .physicallyBased
-            mat.clearCoat.contents = 0.04
-            mat.clearCoatRoughness.contents = 0.72
-            mat.fresnelExponent = 2.6
+            mat.clearCoat.contents = 0.12
+            mat.clearCoatRoughness.contents = 0.38
+            mat.fresnelExponent = 3.2
             mat.shaderModifiers = [
                 .surface: """
                 float ndotv = max(dot(_surface.normal, _surface.view), 0.0);
-                float fresnel = pow(1.0 - ndotv, 2.7);
+                float rim = pow(clamp(1.0 - ndotv, 0.0, 1.0), 3.6);
+                float band = pow(clamp(1.0 - ndotv, 0.0, 1.0), 2.4);
                 vec3 n = _surface.normal;
-                float grain = fract(sin(dot(n.xy * 22.0, vec2(12.9898, 78.233))) * 43758.5453);
-                vec3 film = vec3(
-                    0.52 + 0.48 * sin(n.y * 5.2 + n.x * 2.1),
-                    0.48 + 0.42 * sin(n.z * 4.4 + 1.6),
-                    0.68 + 0.32 * sin(n.x * 3.7 + 0.8)
+                float phase = n.x * 3.1 + n.y * 4.2 + n.z * 1.7;
+                vec3 oil = vec3(
+                    0.50 + 0.50 * sin(phase),
+                    0.50 + 0.50 * sin(phase + 2.094),
+                    0.50 + 0.50 * sin(phase + 4.188)
                 );
-                _surface.diffuse.rgb *= (0.93 + 0.07 * grain);
-                _surface.emission = vec4(film * fresnel * 0.08, 0.0);
-                _surface.reflective = vec4(vec3(0.70, 0.78, 0.92) * fresnel * 0.22, 1.0);
+                _surface.diffuse.rgb = mix(_surface.diffuse.rgb, oil, rim * 0.48);
+                _surface.emission = vec4(oil * rim * 0.20, 0.0);
+                _surface.reflective = vec4(oil * band * 0.32, 1.0);
                 """
             ]
             return mat
