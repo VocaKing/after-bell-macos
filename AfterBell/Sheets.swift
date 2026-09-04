@@ -84,10 +84,17 @@ struct SubjectsSheet: View {
             }
             List {
                 ForEach(store.sortedSubjects) { subject in
-                    HStack {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(AfterBellTheme.brick(subject.order))
-                            .frame(width: 16, height: 16)
+                    HStack(spacing: 10) {
+                        ColorPicker(
+                            "Fill",
+                            selection: Binding(
+                                get: { AfterBellTheme.brick(subject) },
+                                set: { store.setSubjectFill(id: subject.id, color: $0) }
+                            ),
+                            supportsOpacity: false
+                        )
+                        .labelsHidden()
+                        .frame(width: 36)
                         TextField("Name", text: Binding(
                             get: { subject.name },
                             set: { store.renameSubject(id: subject.id, name: $0) }
@@ -108,6 +115,9 @@ struct SubjectsSheet: View {
                 }
             }
             .listStyle(.inset)
+            Text("Click the colour well to fill that block with any colour.")
+                .font(.system(size: 12))
+                .foregroundStyle(AfterBellTheme.muted)
             HStack {
                 Button("Load sample week") { store.loadSample() }
                 Spacer()

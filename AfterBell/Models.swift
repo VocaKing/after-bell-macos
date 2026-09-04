@@ -6,6 +6,28 @@ struct Subject: Identifiable, Codable, Hashable {
     var name: String
     var code: String
     var order: Int
+    var fill: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, code, order, fill
+    }
+
+    init(id: String, name: String, code: String, order: Int, fill: String = "") {
+        self.id = id
+        self.name = name
+        self.code = code
+        self.order = order
+        self.fill = fill
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        code = try c.decode(String.self, forKey: .code)
+        order = try c.decode(Int.self, forKey: .order)
+        fill = try c.decodeIfPresent(String.self, forKey: .fill) ?? ""
+    }
 }
 
 struct Assignment: Identifiable, Codable, Hashable {
