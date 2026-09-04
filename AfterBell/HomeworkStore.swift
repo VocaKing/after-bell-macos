@@ -149,12 +149,16 @@ final class HomeworkStore {
         save()
     }
 
-    func removeSubject(id: String) -> Bool {
-        if assignments.contains(where: { $0.subjectId == id }) { return false }
+    func homeworkCount(for id: String) -> (open: Int, total: Int) {
+        let items = assignments.filter { $0.subjectId == id }
+        return (items.filter { !$0.isDone }.count, items.count)
+    }
+
+    func removeSubject(id: String) {
+        assignments.removeAll { $0.subjectId == id }
         subjects.removeAll { $0.id == id }
         if selectedSubjectId == id { selectedSubjectId = nil }
         save()
-        return true
     }
 
     func saveAssignment(title: String, notes: String, subjectId: String, dueOn: String, priority: Assignment.Priority, editing: Assignment?) {
