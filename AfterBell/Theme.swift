@@ -13,12 +13,12 @@ enum AfterBellTheme {
 
     static func brick(_ order: Int) -> Color {
         let palette: [Color] = [
-            Color(red: 0.55, green: 0.78, blue: 0.68),
-            Color(red: 0.86, green: 0.76, blue: 0.52),
-            Color(red: 0.58, green: 0.70, blue: 0.84),
-            Color(red: 0.86, green: 0.66, blue: 0.66),
-            Color(red: 0.88, green: 0.82, blue: 0.68),
-            Color(red: 0.90, green: 0.88, blue: 0.82),
+            Color(red: 0.58, green: 0.81, blue: 0.70),
+            Color(red: 0.90, green: 0.76, blue: 0.46),
+            Color(red: 0.56, green: 0.70, blue: 0.86),
+            Color(red: 0.88, green: 0.62, blue: 0.62),
+            Color(red: 0.91, green: 0.84, blue: 0.64),
+            Color(red: 0.86, green: 0.82, blue: 0.74),
         ]
         return palette[abs(order) % palette.count]
     }
