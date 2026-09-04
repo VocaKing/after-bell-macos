@@ -1,0 +1,18 @@
+After Bell for Mac
+==================
+
+This is a native macOS app (SwiftUI + SceneKit). It is not for iPhone.
+
+1. Unzip this folder if needed.
+2. Double-click AfterBell.xcodeproj  (not the .swift files, not Qt).
+3. If Xcode asks to Trust / Open, choose Trust.
+4. At the top of Xcode, set the destination to My Mac
+   (not an iPhone simulator).
+5. Press the Play button, or Command-R.
+
+Needs macOS 14 or later and Xcode 15+.
+
+First launch may take a minute to compile. After that the app window is After Bell:
+glazed 3D subject bricks, homework list, manage subjects, and Choose room photo.
+
+Your list is saved on this Mac in Application Support/AfterBell.
