@@ -82,25 +82,24 @@ struct Sidebar: View {
             WeekRing(remaining: store.weekOpen, finished: store.weekDone)
             Spacer()
             VStack(spacing: 8) {
-                Button { store.form = .add } label: {
-                    Label("Add homework", systemImage: "plus").frame(maxWidth: .infinity)
+                SidebarMenuButton(title: "Add homework", systemImage: "plus", prominent: true) {
+                    store.form = .add
                 }
-                .buttonStyle(GlassActionStyle(prominent: true))
-                .focusEffectDisabled()
-                Button { store.sheet = .subjects } label: {
-                    Label("Manage subjects", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity)
+                SidebarMenuButton(title: "Manage subjects", systemImage: "slider.horizontal.3") {
+                    store.sheet = .subjects
                 }
-                .buttonStyle(GlassActionStyle(prominent: false))
-                .focusEffectDisabled()
-                Button { store.chooseRoomPhoto() } label: {
-                    Label(store.roomImage == nil ? "Choose room photo" : "Change room photo", systemImage: "photo")
-                        .frame(maxWidth: .infinity)
+                SidebarMenuButton(
+                    title: store.roomImage == nil ? "Choose room photo" : "Change room photo",
+                    systemImage: "photo"
+                ) {
+                    store.chooseRoomPhoto()
                 }
-                .buttonStyle(GlassActionStyle(prominent: false))
-                .focusEffectDisabled()
                 if store.roomImage != nil {
                     Button("Restore default room") { store.resetRoom() }
                         .buttonStyle(.plain).foregroundStyle(AfterBellTheme.muted).frame(maxWidth: .infinity)
+                        .onHover { inside in
+                            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                        }
                 }
             }
         }
@@ -307,8 +306,31 @@ struct AssignmentRow: View {
     }
 }
 
+struct SidebarMenuButton: View {
+    var title: String
+    var systemImage: String
+    var prominent: Bool = false
+    var action: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(GlassActionStyle(prominent: prominent, hovered: hovered))
+        .onHover { inside in
+            hovered = inside
+            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+        .focusEffectDisabled()
+        .animation(.easeOut(duration: 0.16), value: hovered)
+    }
+}
+
 struct GlassActionStyle: ButtonStyle {
     var prominent: Bool
+    var hovered: Bool = false
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .medium))
@@ -316,9 +338,14 @@ struct GlassActionStyle: ButtonStyle {
             .padding(.vertical, 11)
             .frame(maxWidth: .infinity)
             .background {
-                GlassSurface(tint: prominent ? AfterBellTheme.accent : Color.white.opacity(0.55), radius: 12)
+                GlassSurface(
+                    tint: prominent ? AfterBellTheme.accent : Color.white.opacity(hovered ? 0.75 : 0.55),
+                    radius: 12
+                )
             }
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .scaleEffect(configuration.isPressed ? 0.97 : (hovered ? 1.045 : 1))
+            .offset(y: hovered ? -3 : 0)
+            .shadow(color: Color.white.opacity(hovered ? 0.28 : 0.06), radius: hovered ? 14 : 4, y: hovered ? 5 : 1)
             .opacity(configuration.isPressed ? 0.88 : 1)
     }
 }
