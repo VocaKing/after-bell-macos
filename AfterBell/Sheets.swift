@@ -67,20 +67,20 @@ struct AssignmentSheet: View {
 struct SubjectsSheet: View {
     @Environment(HomeworkStore.self) private var store
     @State private var newName = ""
-    @State private var error = ""
+    @State private var pendingDelete: Subject?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Manage subjects")
                 .font(.system(size: 24, design: .serif))
+            Text("Add as many as you need. There is no cap.")
+                .font(.system(size: 13))
+                .foregroundStyle(AfterBellTheme.muted)
             HStack {
                 TextField("New subject", text: $newName)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(add)
                 Button("Add", action: add)
-            }
-            if !error.isEmpty {
-                Text(error).foregroundStyle(AfterBellTheme.danger).font(.system(size: 12))
             }
             List {
                 ForEach(store.sortedSubjects) { subject in
@@ -104,9 +104,7 @@ struct SubjectsSheet: View {
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundStyle(AfterBellTheme.muted)
                         Button {
-                            if !store.removeSubject(id: subject.id) {
-                                error = "Finish or move homework in \(subject.name) first."
-                            }
+                            pendingDelete = subject
                         } label: {
                             Image(systemName: "trash")
                         }
@@ -115,7 +113,7 @@ struct SubjectsSheet: View {
                 }
             }
             .listStyle(.inset)
-            Text("Click the colour well to fill that block with any colour.")
+            Text("\(store.sortedSubjects.count) subjects · click the colour well to fill a block.")
                 .font(.system(size: 12))
                 .foregroundStyle(AfterBellTheme.muted)
             HStack {
@@ -126,6 +124,43 @@ struct SubjectsSheet: View {
             }
         }
         .padding(24)
+        .confirmationDialog(
+            pendingTitle,
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete subject", role: .destructive) {
+                if let pendingDelete {
+                    store.removeSubject(id: pendingDelete.id)
+                }
+                pendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingDelete = nil
+            }
+        } message: {
+            Text(pendingMessage)
+        }
+    }
+
+    var pendingTitle: String {
+        if let pendingDelete { return "Delete \(pendingDelete.name)?" }
+        return "Delete subject?"
+    }
+
+    var pendingMessage: String {
+        guard let pendingDelete else { return "" }
+        let count = store.homeworkCount(for: pendingDelete.id)
+        if count.total == 0 {
+            return "This subject has no homework. It will be removed from the desk."
+        }
+        let openBit = count.open == 0
+            ? "none open"
+            : "\(count.open) still open"
+        return "\(pendingDelete.name) still has homework (\(openBit), \(count.total) total). Deleting the subject will also remove that homework. Check again before you continue."
     }
 
     func add() {
