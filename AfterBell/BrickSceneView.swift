@@ -202,22 +202,25 @@ struct BrickSceneView: NSViewRepresentable {
                 paragraph.alignment = .center
                 let ink = NSColor(calibratedWhite: 0.11, alpha: 0.90)
                 let mute = NSColor(calibratedWhite: 0.12, alpha: 0.58)
+                let monogram = Self.displayFont(size: compact ? 520 : 400)
                 if compact {
                     (code as NSString).draw(
-                        in: NSRect(x: 80, y: 220, width: 1888, height: 840),
+                        in: NSRect(x: 80, y: 240, width: 1888, height: 800),
                         withAttributes: [
-                            .font: NSFont.systemFont(ofSize: 540, weight: .bold),
+                            .font: monogram,
                             .foregroundColor: ink,
                             .paragraphStyle: paragraph,
+                            .kern: 18,
                         ]
                     )
                 } else {
                     (code as NSString).draw(
-                        in: NSRect(x: 120, y: 140, width: 1808, height: 520),
+                        in: NSRect(x: 120, y: 150, width: 1808, height: 500),
                         withAttributes: [
-                            .font: NSFont.systemFont(ofSize: 380, weight: .bold),
+                            .font: monogram,
                             .foregroundColor: ink,
                             .paragraphStyle: paragraph,
+                            .kern: 16,
                         ]
                     )
                     (name as NSString).draw(
@@ -239,6 +242,13 @@ struct BrickSceneView: NSViewRepresentable {
                 }
                 return true
             }
+        }
+
+        static func displayFont(size: CGFloat) -> NSFont {
+            NSFont(name: "Didot-Bold", size: size)
+                ?? NSFont(name: "BodoniSvtyTwoITCTT-Bold", size: size)
+                ?? NSFont(name: "NewYork-Black", size: size)
+                ?? NSFont.systemFont(ofSize: size, weight: .bold)
         }
 
         static func studioIBL() -> NSImage {
