@@ -155,7 +155,7 @@ struct MainDesk: View {
                                 store.selectedSubjectId = store.selectedSubjectId == subject.id ? nil : subject.id
                             } label: {
                                 BrickSceneView(
-                                    color: AfterBellTheme.brickNSColor(subject.order),
+                                    color: AfterBellTheme.brickNSColor(subject),
                                     code: subject.code,
                                     name: subject.name,
                                     count: open == 0 ? "Clear" : "\(open) open",
@@ -329,7 +329,7 @@ struct AssignmentRow: View {
             }.buttonStyle(.plain)
             HomeworkGlyph(
                 code: subject?.code ?? "-",
-                color: AfterBellTheme.brick(subject?.order ?? 0),
+                color: subject.map { AfterBellTheme.brick($0) } ?? AfterBellTheme.brick(0),
                 hovered: hovered
             )
             VStack(alignment: .leading, spacing: 4) {
