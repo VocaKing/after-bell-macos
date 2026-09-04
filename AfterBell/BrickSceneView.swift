@@ -73,7 +73,7 @@ struct BrickSceneView: NSViewRepresentable {
             let key = SCNNode()
             key.light = SCNLight()
             key.light?.type = .directional
-            key.light?.intensity = 850
+            key.light?.intensity = 520
             key.light?.color = NSColor(calibratedRed: 1, green: 0.97, blue: 0.92, alpha: 1)
             key.position = SCNVector3(2.4, 2.8, 1.8)
             key.look(at: SCNVector3(0, 0, 0))
@@ -82,7 +82,7 @@ struct BrickSceneView: NSViewRepresentable {
             let fill = SCNNode()
             fill.light = SCNLight()
             fill.light?.type = .omni
-            fill.light?.intensity = 280
+            fill.light?.intensity = 210
             fill.light?.color = NSColor(calibratedRed: 0.78, green: 0.86, blue: 1, alpha: 1)
             fill.position = SCNVector3(-1.8, 0.6, 2.0)
             scene.rootNode.addChildNode(fill)
@@ -91,9 +91,9 @@ struct BrickSceneView: NSViewRepresentable {
                 width: compact ? 1.28 : 1.58,
                 height: compact ? 0.86 : 1.02,
                 length: compact ? 0.92 : 1.12,
-                chamferRadius: compact ? 0.06 : 0.07
+                chamferRadius: compact ? 0.14 : 0.18
             )
-            box.chamferSegmentCount = 5
+            box.chamferSegmentCount = 16
             let brickNode = SCNNode(geometry: box)
             brickNode.eulerAngles = restEuler
             scene.rootNode.addChildNode(brickNode)
@@ -146,11 +146,13 @@ struct BrickSceneView: NSViewRepresentable {
 
         static func bodyMaterial(color: NSColor, highlight: Bool) -> SCNMaterial {
             let mat = SCNMaterial()
-            let body = highlight ? (color.blended(withFraction: 0.10, of: .white) ?? color) : color
+            let body = highlight ? (color.blended(withFraction: 0.08, of: .white) ?? color) : color
             mat.diffuse.contents = body
-            mat.roughness.contents = 0.32
-            mat.metalness.contents = 0.08
-            mat.lightingModel = .physicallyBased
+            mat.roughness.contents = 0.78
+            mat.metalness.contents = 0.0
+            mat.specular.contents = NSColor(calibratedWhite: 0.08, alpha: 1)
+            mat.shininess = 0.08
+            mat.lightingModel = .lambert
             return mat
         }
 
