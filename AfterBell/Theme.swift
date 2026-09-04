@@ -154,3 +154,19 @@ struct HomeworkGlyph: View {
             .animation(.easeOut(duration: 0.16), value: hovered)
     }
 }
+
+struct NightWashBackground: View {
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
+            GeometryReader { geo in
+                Rectangle()
+                    .colorEffect(
+                        ShaderLibrary.nightWash(
+                            .float(Float(context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 600))),
+                            .float2(geo.size)
+                        )
+                    )
+            }
+        }
+    }
+}
