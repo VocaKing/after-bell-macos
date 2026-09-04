@@ -27,3 +27,64 @@ enum AfterBellTheme {
         NSColor(brick(order))
     }
 }
+
+struct LiquidGlass: ViewModifier {
+    var tint: Color? = nil
+    var radius: CGFloat = 14
+    var capsule: Bool = false
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            if capsule {
+                content.glassEffect(glass, in: Capsule())
+            } else {
+                content.glassEffect(glass, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            }
+        } else if capsule {
+            content
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.22), lineWidth: 1))
+        } else {
+            let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+            content
+                .background(.ultraThinMaterial, in: shape)
+                .overlay(shape.stroke(Color.white.opacity(0.22), lineWidth: 1))
+        }
+    }
+
+    @available(macOS 26.0, *)
+    private var glass: Glass {
+        if let tint {
+            return .regular.tint(tint).interactive()
+        }
+        return .regular.interactive()
+    }
+}
+
+extension View {
+    func liquidGlass(radius: CGFloat = 14, tint: Color? = nil) -> some View {
+        modifier(LiquidGlass(tint: tint, radius: radius))
+    }
+
+    func liquidCapsule(tint: Color? = nil) -> some View {
+        modifier(LiquidGlass(tint: tint, capsule: true))
+    }
+}
+
+struct HomeworkGlyph: View {
+    var code: String
+    var color: Color
+    var hovered: Bool
+
+    var body: some View {
+        Text(code)
+            .font(.system(size: 15, weight: .bold, design: .rounded))
+            .foregroundStyle(AfterBellTheme.accentFg)
+            .frame(width: 50, height: 50)
+            .liquidGlass(radius: 14, tint: color)
+            .scaleEffect(hovered ? 1.08 : 1)
+            .offset(y: hovered ? -3 : 0)
+            .shadow(color: color.opacity(hovered ? 0.45 : 0.22), radius: hovered ? 12 : 6, y: 4)
+            .animation(.easeOut(duration: 0.16), value: hovered)
+    }
+}
