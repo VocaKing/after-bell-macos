@@ -5,13 +5,14 @@ struct ContentView: View {
     @State private var hoveredBrick: String?
 
     var body: some View {
-        ZStack {
+        HStack(spacing: 0) {
+            Sidebar().frame(width: 268)
+            Divider().overlay(Color.white.opacity(0.08))
+            MainDesk(hoveredBrick: $hoveredBrick)
+        }
+        .padding(.top, 44)
+        .background {
             AtmosphereBackground(image: store.roomImage)
-            HStack(spacing: 0) {
-                Sidebar().frame(width: 268)
-                Divider().overlay(Color.white.opacity(0.08))
-                MainDesk(hoveredBrick: $hoveredBrick)
-            }
         }
         .background(AfterBellTheme.bg)
         .preferredColorScheme(.dark)
@@ -207,6 +208,7 @@ struct MainDesk: View {
                 }
             }
             .padding(28)
+            .padding(.top, 8)
         }
     }
 }
