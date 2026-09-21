@@ -16,8 +16,24 @@ struct ContentView: View {
         }
         .background(AfterBellTheme.bg)
         .preferredColorScheme(.dark)
-        .sheet(item: Binding(get: { store.sheet }, set: { store.sheet = $0 })) { _ in
-            SubjectsSheet().frame(width: 460, height: 580)
+        .sheet(item: Binding(get: { store.sheet }, set: { store.sheet = $0 })) { sheet in
+            switch sheet {
+            case .subjects:
+                SubjectsSheet().frame(width: 460, height: 580)
+            case .feed:
+                FeedSheet().frame(width: 460, height: 420)
+            }
+        }
+        .task {
+            if !store.feedURL.isEmpty {
+                await store.refreshFeed()
+            }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(15 * 60))
+                if !store.feedURL.isEmpty {
+                    await store.refreshFeed()
+                }
+            }
         }
         .sheet(isPresented: Binding(
             get: { store.form != .closed },
@@ -88,6 +104,9 @@ struct Sidebar: View {
                 }
                 SidebarMenuButton(title: "Manage subjects", systemImage: "slider.horizontal.3") {
                     store.sheet = .subjects
+                }
+                SidebarMenuButton(title: "Import from site", systemImage: "link") {
+                    store.sheet = .feed
                 }
                 SidebarMenuButton(
                     title: store.roomImage == nil ? "Choose room photo" : "Change room photo",
@@ -191,7 +210,11 @@ struct MainDesk: View {
                 InquiryRow()
                 WeekStripView()
                 HStack {
-                    Text(store.query.isEmpty && store.selectedSubjectId == nil && store.selectedDay == nil ? "Open work" : "Matches")
+                    Text(
+                        store.selectedDay == nil
+                            ? (store.query.isEmpty && store.selectedSubjectId == nil ? "Open work" : "Matches")
+                            : "Due \(formatShortDate(store.selectedDay!))"
+                    )
                         .font(.system(size: 11, weight: .medium)).foregroundStyle(AfterBellTheme.muted).textCase(.uppercase)
                     Spacer()
                     if let id = store.selectedSubjectId, let subject = store.subjects.first(where: { $0.id == id }) {
@@ -208,8 +231,13 @@ struct MainDesk: View {
                 }
                 if store.visible.isEmpty {
                     VStack(spacing: 10) {
-                        Text("Empty desk").font(.system(size: 28, design: .serif))
-                        Text("Add the first assignment, or load a sample week from Manage subjects.")
+                        Text(store.selectedDay == nil ? "Open list is clear" : "Nothing on this day")
+                            .font(.system(size: 28, design: .serif))
+                        Text(
+                            store.selectedDay == nil
+                                ? "Finished work is filed under its due date. Pick a day on the strip to see it."
+                                : "No homework is stored under \(formatShortDate(store.selectedDay ?? ""))."
+                        )
                             .foregroundStyle(AfterBellTheme.muted).multilineTextAlignment(.center)
                         Button { store.form = .add } label: { Label("Add homework", systemImage: "plus") }
                             .buttonStyle(GlassActionStyle(prominent: true))
@@ -280,17 +308,45 @@ struct HoverChip: View {
 struct WeekStripView: View {
     @Environment(HomeworkStore.self) private var store
     var body: some View {
-        let days = weekDays(from: store.today)
+        let days = weekDays(from: store.weekCursor)
         let counts = store.dayCounts()
-        HStack(spacing: 0) {
-            ForEach(days, id: \.self) { day in
-                WeekDayCell(
-                    day: day,
-                    selected: store.selectedDay == day,
-                    isToday: day == store.today,
-                    hasWork: (counts[day] ?? 0) > 0
-                ) {
-                    store.selectedDay = store.selectedDay == day ? nil : day
+        VStack(spacing: 8) {
+            HStack {
+                Button { store.shiftWeek(-7) } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .buttonStyle(.plain)
+                .focusEffectDisabled()
+                Spacer()
+                Text(formatWeekRange(store.weekCursor))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AfterBellTheme.muted)
+                if startOfWeek(store.weekCursor) != startOfWeek(store.today) {
+                    Button("This week") { store.jumpToThisWeek() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11))
+                        .foregroundStyle(AfterBellTheme.accent)
+                        .padding(.leading, 8)
+                }
+                Spacer()
+                Button { store.shiftWeek(7) } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .buttonStyle(.plain)
+                .focusEffectDisabled()
+            }
+            .padding(.horizontal, 8)
+            HStack(spacing: 0) {
+                ForEach(days, id: \.self) { day in
+                    WeekDayCell(
+                        day: day,
+                        selected: store.selectedDay == day,
+                        isToday: day == store.today,
+                        hasWork: (counts[day]?.open ?? 0) > 0,
+                        hasDone: (counts[day]?.done ?? 0) > 0
+                    ) {
+                        store.selectedDay = store.selectedDay == day ? nil : day
+                    }
                 }
             }
         }
@@ -304,6 +360,7 @@ struct WeekDayCell: View {
     var selected: Bool
     var isToday: Bool
     var hasWork: Bool
+    var hasDone: Bool
     var action: () -> Void
     @State private var hovered = false
     var body: some View {
@@ -315,7 +372,9 @@ struct WeekDayCell: View {
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(isToday ? AfterBellTheme.accent : (hovered ? Color.white.opacity(0.14) : .clear)))
                     .foregroundStyle(isToday ? AfterBellTheme.accentFg : AfterBellTheme.fg)
-                Circle().fill(AfterBellTheme.fg.opacity(hasWork ? 0.55 : 0.12)).frame(width: 4, height: 4)
+                Circle().fill(
+                    AfterBellTheme.fg.opacity(hasWork ? 0.55 : (hasDone ? 0.28 : 0.12))
+                ).frame(width: 4, height: 4)
             }
             .frame(maxWidth: .infinity).padding(.vertical, 10)
             .background(selected || hovered ? Color.white.opacity(hovered ? 0.10 : 0.06) : .clear)
@@ -356,7 +415,18 @@ struct AssignmentRow: View {
                     Text("·")
                     Text(formatDue(item.dueOn, today: store.today))
                         .foregroundStyle(diffDays(item.dueOn, from: store.today) < 0 && !item.isDone ? AfterBellTheme.danger : AfterBellTheme.muted)
-                    if item.priority == .high && !item.isDone {
+                    if item.isDone, let done = item.completedAt {
+                        Text("·")
+                        if item.isLate {
+                            Text("Late")
+                                .foregroundStyle(AfterBellTheme.danger)
+                            Text("·")
+                            Text("Finished \(formatShortDate(done))")
+                                .foregroundStyle(AfterBellTheme.warn)
+                        } else {
+                            Text("Done \(formatShortDate(done))")
+                        }
+                    } else if item.priority == .high {
                         Text("·")
                         Text("Urgent").foregroundStyle(AfterBellTheme.warn)
                     }
