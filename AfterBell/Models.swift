@@ -47,6 +47,11 @@ struct Assignment: Identifiable, Codable, Hashable {
     }
 
     var isDone: Bool { completedAt != nil }
+
+    var isLate: Bool {
+        guard let completedAt else { return false }
+        return completedAt > dueOn
+    }
 }
 
 enum HomeworkForm: Equatable {
@@ -57,7 +62,13 @@ enum HomeworkForm: Equatable {
 
 enum AppSheet: Identifiable {
     case subjects
-    var id: String { "subjects" }
+    case feed
+    var id: String {
+        switch self {
+        case .subjects: "subjects"
+        case .feed: "feed"
+        }
+    }
 }
 
 func newId(_ prefix: String) -> String {
@@ -102,6 +113,20 @@ func greeting(for hour: Int) -> String {
     case 12..<17: return "Good afternoon"
     default: return "Good evening"
     }
+}
+
+func formatShortDate(_ iso: String) -> String {
+    guard let date = isoDay.date(from: iso) else { return iso }
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_GB")
+    f.dateFormat = "d MMM"
+    return f.string(from: date)
+}
+
+func formatWeekRange(_ iso: String) -> String {
+    let days = weekDays(from: iso)
+    guard let first = days.first, let last = days.last else { return "" }
+    return "\(formatShortDate(first)) – \(formatShortDate(last))"
 }
 
 func formatDue(_ iso: String, today: String) -> String {
