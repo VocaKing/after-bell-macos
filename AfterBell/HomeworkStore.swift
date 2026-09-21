@@ -13,6 +13,10 @@ final class HomeworkStore {
     var sheet: AppSheet?
     var roomImage: NSImage?
     var query: String = ""
+    var weekCursor: String = todayISO()
+    var feedURL: String = ""
+    var feedNote: String = ""
+    var feedBusy: Bool = false
 
     private let roomURL: URL
 
@@ -61,11 +65,16 @@ final class HomeworkStore {
         assignments.filter { $0.subjectId == subject.id && !$0.isDone }.count
     }
 
-    func dayCounts() -> [String: Int] {
-        var counts: [String: Int] = [:]
-        for day in weekDays(from: today) { counts[day] = 0 }
-        for item in assignments where !item.isDone {
-            if counts[item.dueOn] != nil { counts[item.dueOn, default: 0] += 1 }
+    func dayCounts() -> [String: (open: Int, done: Int)] {
+        var counts: [String: (open: Int, done: Int)] = [:]
+        for day in weekDays(from: weekCursor) { counts[day] = (0, 0) }
+        for item in assignments {
+            guard counts[item.dueOn] != nil else { continue }
+            if item.isDone {
+                counts[item.dueOn, default: (0, 0)].done += 1
+            } else {
+                counts[item.dueOn, default: (0, 0)].open += 1
+            }
         }
         return counts
     }
@@ -75,7 +84,11 @@ final class HomeworkStore {
         return assignments
             .filter { item in
                 if let selectedSubjectId, item.subjectId != selectedSubjectId { return false }
-                if let selectedDay, item.dueOn != selectedDay { return false }
+                if let selectedDay {
+                    if item.dueOn != selectedDay { return false }
+                } else if item.isDone {
+                    return false
+                }
                 if q.isEmpty { return true }
                 if q == "overdue" { return !item.isDone && diffDays(item.dueOn, from: today) < 0 }
                 if q == "finished" || q == "done" { return item.isDone }
@@ -124,7 +137,13 @@ final class HomeworkStore {
         save()
     }
 
-    func setSubjectFill(id: String, color: Color) {
+    func shiftWeek(_ days: Int) {
+        weekCursor = addDays(startOfWeek(weekCursor), days)
+    }
+
+    func jumpToThisWeek() {
+        weekCursor = today
+    }
         let hex = AfterBellTheme.hex(from: color)
         subjects = subjects.map { item in
             guard item.id == id else { return item }
@@ -230,8 +249,189 @@ final class HomeworkStore {
         try? FileManager.default.removeItem(at: roomURL)
     }
 
+    func connectFeed(_ raw: String) async {
+        feedURL = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        save()
+        await refreshFeed()
+    }
+
+    func clearFeed() {
+        feedURL = ""
+        feedNote = "Disconnected."
+        save()
+    }
+
+    func refreshFeed() async {
+        let raw = feedURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: raw), url.scheme == "http" || url.scheme == "https" else {
+            feedNote = "Paste a full http(s) link."
+            return
+        }
+        feedBusy = true
+        defer { feedBusy = false }
+        do {
+            var request = URLRequest(url: url, timeoutInterval: 20)
+            request.setValue("text/calendar, text/html, text/plain;q=0.9, */*;q=0.8", forHTTPHeaderField: "Accept")
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 401 || status == 403 {
+                feedNote = "That page needs a login. Export a calendar (.ics) from it, then paste the secret feed link."
+                return
+            }
+            guard status == 0 || (200..<400).contains(status) else {
+                feedNote = "The page returned \(status)."
+                return
+            }
+            let text = String(data: data, encoding: .utf8)
+                ?? String(data: data, encoding: .isoLatin1)
+                ?? ""
+            let events: [FeedEvent]
+            if text.contains("BEGIN:VCALENDAR") || text.contains("BEGIN:VEVENT") {
+                events = parseICS(text)
+            } else {
+                events = parseWeb(text)
+            }
+            let added = importEvents(events)
+            if events.isEmpty {
+                feedNote = "Connected, but no homework dates were found. A calendar .ics link works more reliably than a login page."
+            } else {
+                feedNote = added == 0
+                    ? "Checked \(events.count) items. Nothing new."
+                    : "Added \(added) of \(events.count) items from the page."
+            }
+        } catch {
+            feedNote = "Could not reach that page. Check the link, or use an .ics calendar export."
+        }
+    }
+
+    @discardableResult
+    private func importEvents(_ events: [FeedEvent]) -> Int {
+        var added = 0
+        for event in events {
+            let title = event.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty, event.dueOn.count == 10 else { continue }
+            let exists = assignments.contains {
+                $0.title.compare(title, options: .caseInsensitive) == .orderedSame && $0.dueOn == event.dueOn
+            }
+            if exists { continue }
+            assignments.append(
+                Assignment(
+                    id: newId("hw"),
+                    subjectId: guessSubjectId(from: title),
+                    title: title,
+                    notes: event.notes,
+                    dueOn: event.dueOn,
+                    priority: .normal,
+                    completedAt: nil
+                )
+            )
+            added += 1
+        }
+        if added > 0 { save() }
+        return added
+    }
+
+    private func guessSubjectId(from title: String) -> String {
+        let t = title.lowercased()
+        if let match = subjects.first(where: { t.contains($0.name.lowercased()) }) {
+            return match.id
+        }
+        if let match = subjects.first(where: {
+            t.range(of: "\\b\($0.code)\\b", options: [.regularExpression, .caseInsensitive]) != nil
+        }) {
+            return match.id
+        }
+        if subjects.isEmpty {
+            addSubject(name: "Imported")
+        }
+        return subjects.first?.id ?? ""
+    }
+
+    private func parseICS(_ text: String) -> [FeedEvent] {
+        let unfolded = text
+            .replacingOccurrences(of: "\r\n ", with: "")
+            .replacingOccurrences(of: "\n ", with: "")
+            .replacingOccurrences(of: "\r\n\t", with: "")
+        var events: [FeedEvent] = []
+        var current: [String: String] = [:]
+        for raw in unfolded.components(separatedBy: .newlines) {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line == "BEGIN:VEVENT" {
+                current = [:]
+            } else if line == "END:VEVENT" {
+                let title = icsUnescape(current["SUMMARY"] ?? "")
+                let due = icsDay(current["DUE"] ?? current["DTSTART"] ?? "")
+                if !title.isEmpty, due.count == 10 {
+                    events.append(FeedEvent(title: title, dueOn: due, notes: icsUnescape(current["DESCRIPTION"] ?? "")))
+                }
+            } else if let colon = line.firstIndex(of: ":") {
+                let key = String(line[..<colon]).split(separator: ";").first.map { String($0).uppercased() } ?? ""
+                current[key] = String(line[line.index(after: colon)...])
+            }
+        }
+        return events
+    }
+
+    private func parseWeb(_ html: String) -> [FeedEvent] {
+        var text = html
+        text = text.replacingOccurrences(of: "(?s)<script[^>]*>.*?</script>", with: " ", options: .regularExpression)
+        text = text.replacingOccurrences(of: "(?s)<style[^>]*>.*?</style>", with: " ", options: .regularExpression)
+        text = text.replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: .regularExpression)
+        text = text.replacingOccurrences(of: "</(p|div|li|tr|h1|h2|h3|td)>", with: "\n", options: .regularExpression)
+        text = text.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+        text = text.replacingOccurrences(of: "&nbsp;", with: " ")
+        text = text.replacingOccurrences(of: "&", with: "&")
+        text = text.replacingOccurrences(of: "[ \\t]+", with: " ", options: .regularExpression)
+        var events: [FeedEvent] = []
+        let iso = try? NSRegularExpression(pattern: "\\b(20\\d{2})[-/.](\\d{1,2})[-/.](\\d{1,2})\\b")
+        let dmy = try? NSRegularExpression(pattern: "\\b(\\d{1,2})[-/.](\\d{1,2})[-/.](20\\d{2})\\b")
+        for raw in text.components(separatedBy: .newlines) {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard line.count >= 8, line.count < 180 else { continue }
+            let ns = line as NSString
+            let range = NSRange(location: 0, length: ns.length)
+            var due: String?
+            if let iso, let match = iso.firstMatch(in: line, range: range) {
+                due = String(format: "%@-%02d-%02d", ns.substring(with: match.range(at: 1)), Int(ns.substring(with: match.range(at: 2))) ?? 0, Int(ns.substring(with: match.range(at: 3))) ?? 0)
+            } else if let dmy, let match = dmy.firstMatch(in: line, range: range) {
+                due = String(format: "%@-%02d-%02d", ns.substring(with: match.range(at: 3)), Int(ns.substring(with: match.range(at: 2))) ?? 0, Int(ns.substring(with: match.range(at: 1))) ?? 0)
+            }
+            guard let due, due.count == 10 else { continue }
+            var title = line
+            if let r = title.range(of: #"\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b"#, options: .regularExpression) {
+                title.removeSubrange(r)
+            }
+            if let r = title.range(of: #"\b\d{1,2}[-/.]\d{1,2}[-/.]20\d{2}\b"#, options: .regularExpression) {
+                title.removeSubrange(r)
+            }
+            title = title.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters))
+            guard title.count >= 4 else { continue }
+            if events.contains(where: { $0.title == title && $0.dueOn == due }) { continue }
+            events.append(FeedEvent(title: title, dueOn: due, notes: "Imported from page"))
+        }
+        return events
+    }
+
+    private func icsDay(_ value: String) -> String {
+        let digits = value.filter(\.isNumber)
+        guard digits.count >= 8 else { return "" }
+        let y = digits.prefix(4)
+        let m = digits.dropFirst(4).prefix(2)
+        let d = digits.dropFirst(6).prefix(2)
+        return "\(y)-\(m)-\(d)"
+    }
+
+    private func icsUnescape(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\\\n", with: "\n")
+            .replacingOccurrences(of: "\\n", with: "\n")
+            .replacingOccurrences(of: "\\,", with: ",")
+            .replacingOccurrences(of: "\\;", with: ";")
+    }
+
     private func save() {
-        let snap = Snapshot(subjects: subjects, assignments: assignments)
+        let snap = Snapshot(subjects: subjects, assignments: assignments, feedURL: feedURL.isEmpty ? nil : feedURL)
         let url = dataURL()
         do {
             let data = try JSONEncoder().encode(snap)
@@ -251,6 +451,7 @@ final class HomeworkStore {
             return next
         }
         assignments = snap.assignments
+        feedURL = snap.feedURL ?? ""
     }
 
     private func dataURL() -> URL {
@@ -263,6 +464,13 @@ final class HomeworkStore {
     struct Snapshot: Codable {
         var subjects: [Subject]
         var assignments: [Assignment]
+        var feedURL: String?
+    }
+
+    struct FeedEvent {
+        var title: String
+        var dueOn: String
+        var notes: String
     }
 
     static let defaultSubjects: [Subject] = [
