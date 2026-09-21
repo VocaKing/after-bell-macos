@@ -169,6 +169,53 @@ struct SubjectsSheet: View {
     }
 }
 
+struct FeedSheet: View {
+    @Environment(HomeworkStore.self) private var store
+    @State private var url = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Import from a site")
+                .font(.system(size: 24, design: .serif))
+            Text("Best: a calendar export (.ics) from Google Classroom, ManageBac, or your school portal. A public homework page can also work. Pages that need a login usually will not.")
+                .font(.system(size: 13))
+                .foregroundStyle(AfterBellTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            TextField("https://…", text: $url)
+                .textFieldStyle(.roundedBorder)
+            if !store.feedNote.isEmpty {
+                Text(store.feedNote)
+                    .font(.system(size: 12))
+                    .foregroundStyle(AfterBellTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !store.feedURL.isEmpty {
+                Text("Connected. After Bell checks this link every 15 minutes.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AfterBellTheme.warn)
+            }
+            Spacer()
+            HStack {
+                if !store.feedURL.isEmpty {
+                    Button("Disconnect") { store.clearFeed() }
+                }
+                Spacer()
+                Button("Cancel") { store.sheet = nil }
+                    .keyboardShortcut(.cancelAction)
+                Button(store.feedBusy ? "Reading…" : (store.feedURL.isEmpty ? "Connect" : "Refresh now")) {
+                    Task { await store.connectFeed(url) }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.feedBusy)
+            }
+        }
+        .padding(24)
+        .onAppear {
+            url = store.feedURL
+        }
+    }
+}
+
 private func isoDate(_ iso: String) -> Date? {
     let f = DateFormatter()
     f.calendar = Calendar(identifier: .gregorian)
