@@ -69,12 +69,13 @@ final class HomeworkStore {
         var counts: [String: (open: Int, done: Int)] = [:]
         for day in weekDays(from: weekCursor) { counts[day] = (0, 0) }
         for item in assignments {
-            guard counts[item.dueOn] != nil else { continue }
+            guard var pair = counts[item.dueOn] else { continue }
             if item.isDone {
-                counts[item.dueOn, default: (0, 0)].done += 1
+                pair.done += 1
             } else {
-                counts[item.dueOn, default: (0, 0)].open += 1
+                pair.open += 1
             }
+            counts[item.dueOn] = pair
         }
         return counts
     }
@@ -144,6 +145,8 @@ final class HomeworkStore {
     func jumpToThisWeek() {
         weekCursor = today
     }
+
+    func setSubjectFill(id: String, color: Color) {
         let hex = AfterBellTheme.hex(from: color)
         subjects = subjects.map { item in
             guard item.id == id else { return item }
