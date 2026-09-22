@@ -47,7 +47,6 @@ struct BrickSceneView: NSViewRepresentable {
     final class Coordinator {
         var jelly: SCNNode?
         var core: SCNNode?
-        var legend: SCNNode?
         var lastKey = ""
         var lastPose = ""
         var freezeWork: DispatchWorkItem?
@@ -109,14 +108,6 @@ struct BrickSceneView: NSViewRepresentable {
             root.addChildNode(inner)
             core = inner
 
-            let plate = SCNPlane(width: compact ? 0.92 : 1.18, height: compact ? 0.62 : 0.78)
-            plate.cornerRadius = compact ? 0.18 : 0.24
-            let legendNode = SCNNode(geometry: plate)
-            legendNode.position = SCNVector3(0, compact ? 0.02 : 0.04, compact ? 0.34 : 0.44)
-            legendNode.name = "legend"
-            root.addChildNode(legendNode)
-            legend = legendNode
-
             let shadow = SCNPlane(width: compact ? 1.55 : 2.05, height: compact ? 1.18 : 1.55)
             let sm = SCNMaterial()
             sm.diffuse.contents = NSColor.black
@@ -147,10 +138,11 @@ struct BrickSceneView: NSViewRepresentable {
             if key != lastKey {
                 lastKey = key
                 if let body = jelly.childNode(withName: "body", recursively: false) {
-                    body.geometry?.materials = [Self.gelatin(rgb, inner: false)]
+                    body.geometry?.materials = Self.bodyMaterials(
+                        color: rgb, code: code, name: name, count: count, compact: compact
+                    )
                 }
                 core?.geometry?.materials = [Self.gelatin(Self.darker(rgb), inner: true)]
-                legend?.geometry?.materials = [Self.letterPlate(color: rgb, code: code, name: name, count: count, compact: compact)]
             }
 
             let pose = "\(pressed)-\(hovered)-\(selected)"
@@ -255,23 +247,28 @@ struct BrickSceneView: NSViewRepresentable {
             return mat
         }
 
-        static func letterPlate(
+        static func bodyMaterials(
             color: NSColor,
             code: String,
             name: String,
             count: String,
             compact: Bool
-        ) -> SCNMaterial {
-            let mat = SCNMaterial()
-            let image = paintLetters(color: color, code: code, name: name, count: count, compact: compact)
-            mat.diffuse.contents = image
-            mat.transparent.contents = image
-            mat.transparencyMode = .aOne
-            mat.lightingModel = .constant
-            mat.writesToDepthBuffer = false
-            mat.blendMode = .alpha
-            mat.isDoubleSided = false
-            return mat
+        ) -> [SCNMaterial] {
+            let shell = gelatin(color, inner: false)
+            let front = gelatin(color, inner: false)
+            front.transparency = 1
+            front.blendMode = .alpha
+            front.shaderModifiers = nil
+            let face = raster(paintFace(color: color, code: code, name: name, count: count, compact: compact))
+            front.diffuse.contents = face
+            front.transparent.contents = nil
+            front.diffuse.wrapS = .clamp
+            front.diffuse.wrapT = .clamp
+            front.diffuse.magnificationFilter = .linear
+            front.diffuse.minificationFilter = .linear
+            front.diffuse.mipFilter = .linear
+            front.diffuse.maxAnisotropy = 16
+            return [front, shell, shell, shell, shell, shell]
         }
 
         static func darker(_ color: NSColor) -> NSColor {
@@ -282,6 +279,30 @@ struct BrickSceneView: NSViewRepresentable {
                 blue: max(0, c.blueComponent * 0.72),
                 alpha: 1
             )
+        }
+
+        static func raster(_ image: NSImage) -> CGImage {
+            let width = max(Int(image.size.width), 1)
+            let height = max(Int(image.size.height), 1)
+            let rep = NSBitmapImageRep(
+                bitmapDataPlanes: nil,
+                pixelsWide: width,
+                pixelsHigh: height,
+                bitsPerSample: 8,
+                samplesPerPixel: 4,
+                hasAlpha: true,
+                isPlanar: false,
+                colorSpaceName: .deviceRGB,
+                bytesPerRow: 0,
+                bitsPerPixel: 0
+            )!
+            let ctx = NSGraphicsContext(bitmapImageRep: rep)!
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = ctx
+            ctx.imageInterpolation = .high
+            image.draw(in: NSRect(x: 0, y: 0, width: width, height: height))
+            NSGraphicsContext.restoreGraphicsState()
+            return rep.cgImage!
         }
 
         static func jellyGeometry(compact: Bool, radiusBoost: CGFloat) -> SCNGeometry {
@@ -356,7 +377,7 @@ struct BrickSceneView: NSViewRepresentable {
                     let v = CGFloat(j) / CGFloat(segs)
                     for i in 0...segs {
                         let u = CGFloat(i) / CGFloat(segs)
-                        out.append((point(u * 2 - 1, v * 2 - 1), CGPoint(x: u, y: v)))
+                        out.append((point(u * 2 - 1, v * 2 - 1), CGPoint(x: u, y: 1 - v)))
                     }
                 }
                 return out
@@ -379,61 +400,56 @@ struct BrickSceneView: NSViewRepresentable {
             )
         }
 
-        static func paintLetters(
+        static func paintFace(
             color: NSColor,
             code: String,
             name: String,
             count: String,
             compact: Bool
         ) -> NSImage {
-            let size = NSSize(width: 2048, height: 1280)
-            let image = NSImage(size: size, flipped: true) { rect in
+            let size = NSSize(width: 2048, height: 2048)
+            return NSImage(size: size, flipped: true) { rect in
                 NSGraphicsContext.current?.shouldAntialias = true
                 NSGraphicsContext.current?.imageInterpolation = .high
-                NSColor.clear.setFill()
+                color.setFill()
                 rect.fill()
                 let paragraph = NSMutableParagraphStyle()
                 paragraph.alignment = .center
-                let ink = NSColor(calibratedWhite: 0.08, alpha: 0.88)
-                let mute = NSColor(calibratedWhite: 0.10, alpha: 0.62)
-                let shadow = NSShadow()
-                shadow.shadowColor = NSColor.white.withAlphaComponent(0.18)
-                shadow.shadowBlurRadius = 8
-                let monogram = displayFont(size: compact ? 500 : 390)
+                let ink = NSColor(calibratedWhite: 0.07, alpha: 0.92)
+                let mute = NSColor(calibratedWhite: 0.10, alpha: 0.70)
+                let monogram = displayFont(size: compact ? 720 : 560)
                 if compact {
                     (code as NSString).draw(
-                        in: NSRect(x: 80, y: 240, width: 1888, height: 800),
+                        in: NSRect(x: 80, y: 420, width: 1888, height: 1200),
+                        withAttributes: [
+                            .font: monogram,
+                            .foregroundColor: ink,
+                            .paragraphStyle: paragraph,
+                            .kern: 8,
+                        ]
+                    )
+                } else {
+                    (code as NSString).draw(
+                        in: NSRect(x: 80, y: 280, width: 1888, height: 900),
                         withAttributes: [
                             .font: monogram,
                             .foregroundColor: ink,
                             .paragraphStyle: paragraph,
                             .kern: 6,
-                            .shadow: shadow,
-                        ]
-                    )
-                } else {
-                    (code as NSString).draw(
-                        in: NSRect(x: 120, y: 150, width: 1808, height: 500),
-                        withAttributes: [
-                            .font: monogram,
-                            .foregroundColor: ink,
-                            .paragraphStyle: paragraph,
-                            .kern: 4,
-                            .shadow: shadow,
                         ]
                     )
                     (name as NSString).draw(
-                        in: NSRect(x: 120, y: 690, width: 1808, height: 190),
+                        in: NSRect(x: 80, y: 1220, width: 1888, height: 240),
                         withAttributes: [
-                            .font: NSFont.systemFont(ofSize: 132, weight: .semibold),
+                            .font: NSFont.systemFont(ofSize: 140, weight: .semibold),
                             .foregroundColor: ink,
                             .paragraphStyle: paragraph,
                         ]
                     )
                     (count as NSString).draw(
-                        in: NSRect(x: 120, y: 900, width: 1808, height: 150),
+                        in: NSRect(x: 80, y: 1500, width: 1888, height: 200),
                         withAttributes: [
-                            .font: NSFont.systemFont(ofSize: 92, weight: .medium),
+                            .font: NSFont.systemFont(ofSize: 110, weight: .medium),
                             .foregroundColor: mute,
                             .paragraphStyle: paragraph,
                         ]
@@ -441,7 +457,6 @@ struct BrickSceneView: NSViewRepresentable {
                 }
                 return true
             }
-            return image
         }
 
         static func displayFont(size: CGFloat) -> NSFont {
