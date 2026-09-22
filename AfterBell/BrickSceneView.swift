@@ -27,6 +27,14 @@ struct BrickSceneView: NSViewRepresentable {
         view.isPlaying = false
         view.rendersContinuously = false
         view.preferredFramesPerSecond = 30
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: context.coordinator,
+            userInfo: nil
+        )
+        view.addTrackingArea(area)
+        context.coordinator.view = view
         context.coordinator.build(in: view, compact: compact)
         context.coordinator.apply(
             color: color, code: code, name: name, count: count,
@@ -44,12 +52,36 @@ struct BrickSceneView: NSViewRepresentable {
         )
     }
 
-    final class Coordinator {
+    final class Coordinator: NSObject {
         var jelly: SCNNode?
         var core: SCNNode?
+        var legend: SCNNode?
         var lastKey = ""
         var lastPose = ""
         var freezeWork: DispatchWorkItem?
+        var hoverWork: DispatchWorkItem?
+        var trackingHover = false
+        var swiftHover = false
+        var pressed = false
+        var selected = false
+        var compact = false
+        weak var view: SCNView?
+
+        @objc func mouseEntered(with event: NSEvent) {
+            hoverWork?.cancel()
+            trackingHover = true
+            applyPose()
+        }
+
+        @objc func mouseExited(with event: NSEvent) {
+            hoverWork?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                self?.trackingHover = false
+                self?.applyPose()
+            }
+            hoverWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: work)
+        }
 
         func build(in view: SCNView, compact: Bool) {
             let scene = SCNScene()
@@ -108,6 +140,13 @@ struct BrickSceneView: NSViewRepresentable {
             root.addChildNode(inner)
             core = inner
 
+            let plate = SCNPlane(width: compact ? 1.00 : 1.28, height: compact ? 0.70 : 0.90)
+            let legendNode = SCNNode(geometry: plate)
+            legendNode.position = SCNVector3(0, 0.02, compact ? 0.37 : 0.48)
+            legendNode.name = "legend"
+            root.addChildNode(legendNode)
+            legend = legendNode
+
             let shadow = SCNPlane(width: compact ? 1.55 : 2.05, height: compact ? 1.18 : 1.55)
             let sm = SCNMaterial()
             sm.diffuse.contents = NSColor.black
@@ -134,78 +173,81 @@ struct BrickSceneView: NSViewRepresentable {
         ) {
             guard let jelly else { return }
             let rgb = color.usingColorSpace(.deviceRGB) ?? color
+            swiftHover = hovered
+            self.pressed = pressed
+            self.selected = selected
+            self.compact = compact
+            self.view = view
+
             let key = "\(code)|\(name)|\(count)|\(compact)|\(rgb.redComponent)|\(rgb.greenComponent)|\(rgb.blueComponent)"
             if key != lastKey {
                 lastKey = key
                 if let body = jelly.childNode(withName: "body", recursively: false) {
-                    body.geometry?.materials = Self.bodyMaterials(
-                        color: rgb, code: code, name: name, count: count, compact: compact
-                    )
+                    let gel = Self.gelatin(rgb, inner: false)
+                    body.geometry?.materials = [gel, gel, gel, gel, gel, gel]
                 }
                 core?.geometry?.materials = [Self.gelatin(Self.darker(rgb), inner: true)]
+                legend?.geometry?.materials = [
+                    Self.letterPlate(color: rgb, code: code, name: name, count: count, compact: compact)
+                ]
             }
 
-            let pose = "\(pressed)-\(hovered)-\(selected)"
-            guard pose != lastPose else { return }
+            applyPose()
+        }
+
+        func applyPose() {
+            guard let jelly else { return }
+            let hovering = trackingHover || swiftHover
+            let pose = "\(pressed)-\(hovering)-\(selected)"
+            if pose == lastPose { return }
             lastPose = pose
 
             let scale: SCNVector3
             let y: CGFloat
             if pressed {
-                scale = SCNVector3(1.34, 0.52, 1.34)
-                y = compact ? -0.10 : -0.14
-            } else if hovered {
-                scale = SCNVector3(1.05, 1.07, 1.05)
-                y = compact ? 0.05 : 0.07
+                scale = SCNVector3(1.32, 0.56, 1.32)
+                y = compact ? -0.08 : -0.11
+            } else if hovering {
+                scale = SCNVector3(1.04, 1.04, 1.04)
+                y = 0
             } else if selected {
-                scale = SCNVector3(1.03, 0.97, 1.03)
-                y = 0.02
+                scale = SCNVector3(1.02, 0.98, 1.02)
+                y = 0
             } else {
                 scale = SCNVector3(1, 1, 1)
                 y = 0
             }
 
-            view.isPlaying = true
-            view.rendersContinuously = true
+            view?.isPlaying = true
+            view?.rendersContinuously = true
             freezeWork?.cancel()
+            jelly.removeAction(forKey: "wobble")
 
             SCNTransaction.begin()
-            SCNTransaction.animationDuration = pressed ? 0.10 : 0.48
-            SCNTransaction.animationTimingFunction = CAMediaTimingFunction(
-                controlPoints: pressed ? 0.15 : 0.22,
-                pressed ? 0.90 : 1.70,
-                0.28,
-                1.00
-            )
+            SCNTransaction.animationDuration = pressed ? 0.09 : 0.32
+            SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             jelly.scale = scale
             jelly.position.y = y
-            jelly.eulerAngles = SCNVector3(pressed ? 0.04 : (hovered ? -0.03 : 0), hovered && !pressed ? -0.04 : 0, 0)
+            jelly.eulerAngles = SCNVector3Zero
             SCNTransaction.commit()
 
-            jelly.removeAction(forKey: "wobble")
-            if hovered && !pressed {
+            if hovering && !pressed {
                 let wobble = SCNAction.repeatForever(
-                    SCNAction.sequence([
-                        SCNAction.customAction(duration: 0.55) { node, t in
-                            let u = sin(Double(t) / 0.55 * .pi)
-                            node.scale = SCNVector3(1.05 + 0.03 * u, 1.07 - 0.035 * u, 1.05 + 0.03 * u)
-                        },
-                        SCNAction.customAction(duration: 0.55) { node, t in
-                            let u = sin(Double(t) / 0.55 * .pi)
-                            node.scale = SCNVector3(1.08 - 0.03 * u, 1.035 + 0.035 * u, 1.08 - 0.03 * u)
-                        },
-                    ])
+                    SCNAction.customAction(duration: 1.8) { node, t in
+                        let s = sin(Double(t) / 1.8 * .pi * 2)
+                        node.scale = SCNVector3(1.04 + 0.018 * s, 1.04 - 0.022 * s, 1.04 + 0.018 * s)
+                    }
                 )
                 jelly.runAction(wobble, forKey: "wobble")
             }
 
-            if !pressed && !hovered {
-                let work = DispatchWorkItem { [weak view] in
-                    view?.isPlaying = false
-                    view?.rendersContinuously = false
+            if !pressed && !hovering {
+                let work = DispatchWorkItem { [weak self] in
+                    self?.view?.isPlaying = false
+                    self?.view?.rendersContinuously = false
                 }
                 freezeWork = work
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: work)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: work)
             }
         }
 
@@ -222,7 +264,7 @@ struct BrickSceneView: NSViewRepresentable {
             mat.clearCoat.contents = inner ? 0.05 : 0.55
             mat.clearCoatRoughness.contents = 0.12
             mat.fresnelExponent = 1.4
-            mat.transparency = inner ? 0.92 : 0.62
+            mat.transparency = inner ? 0.78 : 0.46
             mat.transparencyMode = .singleLayer
             mat.blendMode = .alpha
             mat.isDoubleSided = true
@@ -247,28 +289,33 @@ struct BrickSceneView: NSViewRepresentable {
             return mat
         }
 
-        static func bodyMaterials(
+        static func letterPlate(
             color: NSColor,
             code: String,
             name: String,
             count: String,
             compact: Bool
-        ) -> [SCNMaterial] {
-            let shell = gelatin(color, inner: false)
-            let front = gelatin(color, inner: false)
-            front.transparency = 1
-            front.blendMode = .alpha
-            front.shaderModifiers = nil
-            let face = raster(paintFace(color: color, code: code, name: name, count: count, compact: compact))
-            front.diffuse.contents = face
-            front.transparent.contents = nil
-            front.diffuse.wrapS = .clamp
-            front.diffuse.wrapT = .clamp
-            front.diffuse.magnificationFilter = .linear
-            front.diffuse.minificationFilter = .linear
-            front.diffuse.mipFilter = .linear
-            front.diffuse.maxAnisotropy = 16
-            return [front, shell, shell, shell, shell, shell]
+        ) -> SCNMaterial {
+            let mat = SCNMaterial()
+            let image = raster(paintFace(color: color, code: code, name: name, count: count, compact: compact))
+            mat.diffuse.contents = image
+            mat.transparent.contents = image
+            mat.transparencyMode = .aOne
+            mat.lightingModel = .constant
+            mat.blendMode = .alpha
+            mat.writesToDepthBuffer = false
+            mat.isDoubleSided = false
+            return mat
+        }
+
+        static func complementaryInk(_ color: NSColor) -> NSColor {
+            let c = color.usingColorSpace(.deviceRGB) ?? color
+            var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            c.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+            let hue = (h + 0.5).truncatingRemainder(dividingBy: 1)
+            let sat = min(1, max(0.55, s * 0.9 + 0.25))
+            let bri: CGFloat = b > 0.62 ? 0.22 : 0.96
+            return NSColor(calibratedHue: hue, saturation: sat, brightness: bri, alpha: 1)
         }
 
         static func darker(_ color: NSColor) -> NSColor {
@@ -411,12 +458,12 @@ struct BrickSceneView: NSViewRepresentable {
             return NSImage(size: size, flipped: true) { rect in
                 NSGraphicsContext.current?.shouldAntialias = true
                 NSGraphicsContext.current?.imageInterpolation = .high
-                color.setFill()
+                NSColor.clear.setFill()
                 rect.fill()
                 let paragraph = NSMutableParagraphStyle()
                 paragraph.alignment = .center
-                let ink = NSColor(calibratedWhite: 0.07, alpha: 0.92)
-                let mute = NSColor(calibratedWhite: 0.10, alpha: 0.70)
+                let ink = complementaryInk(color)
+                let mute = ink.withAlphaComponent(0.82)
                 let monogram = displayFont(size: compact ? 720 : 560)
                 if compact {
                     (code as NSString).draw(
