@@ -185,6 +185,7 @@ struct MainDesk: View {
                                     pressed: pressedBrick == subject.id
                                 )
                                 .frame(height: store.sortedSubjects.count > 8 ? 168 : 210)
+                                .contentShape(Rectangle())
                                 .onHover { inside in
                                     hoveredBrick = inside ? subject.id : (hoveredBrick == subject.id ? nil : hoveredBrick)
                                 }
