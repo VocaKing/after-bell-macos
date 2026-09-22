@@ -156,6 +156,7 @@ struct WeekRing: View {
 struct MainDesk: View {
     @Environment(HomeworkStore.self) private var store
     @Binding var hoveredBrick: String?
+    @State private var pressedBrick: String?
     private let hour = Calendar.current.component(.hour, from: Date())
     var body: some View {
         ScrollView {
@@ -166,7 +167,7 @@ struct MainDesk: View {
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Subject links").font(.system(size: 11, weight: .medium)).foregroundStyle(AfterBellTheme.muted).textCase(.uppercase)
-                    Text("Hover a brick, then click to open that subject. Add more any time — the grid grows with you.")
+                    Text("Press a jelly — it squashes, then wobbles back. Click to open that subject.")
                         .font(.system(size: 13)).foregroundStyle(AfterBellTheme.muted)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 188, maximum: 280), spacing: 12)], spacing: 10) {
                         ForEach(store.sortedSubjects) { subject in
@@ -180,7 +181,8 @@ struct MainDesk: View {
                                     name: subject.name,
                                     count: open == 0 ? "Clear" : "\(open) open",
                                     hovered: hoveredBrick == subject.id,
-                                    selected: store.selectedSubjectId == subject.id
+                                    selected: store.selectedSubjectId == subject.id,
+                                    pressed: pressedBrick == subject.id
                                 )
                                 .frame(height: store.sortedSubjects.count > 8 ? 168 : 210)
                                 .onHover { inside in
@@ -188,6 +190,13 @@ struct MainDesk: View {
                                 }
                             }
                             .buttonStyle(.plain)
+                            .simultaneousGesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { _ in pressedBrick = subject.id }
+                                    .onEnded { _ in
+                                        if pressedBrick == subject.id { pressedBrick = nil }
+                                    }
+                            )
                         }
                         Button {
                             store.sheet = .subjects
