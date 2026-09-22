@@ -9,6 +9,7 @@ struct BrickSceneView: NSViewRepresentable {
     var count: String
     var hovered: Bool
     var selected: Bool
+    var pressed: Bool = false
     var compact: Bool = false
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -25,10 +26,12 @@ struct BrickSceneView: NSViewRepresentable {
         view.allowsCameraControl = false
         view.isPlaying = false
         view.rendersContinuously = false
+        view.preferredFramesPerSecond = 30
         context.coordinator.build(in: view, compact: compact)
         context.coordinator.apply(
             color: color, code: code, name: name, count: count,
-            hovered: hovered, selected: selected, compact: compact
+            hovered: hovered, selected: selected, pressed: pressed,
+            compact: compact, view: view
         )
         return view
     }
@@ -36,72 +39,85 @@ struct BrickSceneView: NSViewRepresentable {
     func updateNSView(_ view: SCNView, context: Context) {
         context.coordinator.apply(
             color: color, code: code, name: name, count: count,
-            hovered: hovered, selected: selected, compact: compact
+            hovered: hovered, selected: selected, pressed: pressed,
+            compact: compact, view: view
         )
     }
 
     final class Coordinator {
-        var brick: SCNNode?
+        var jelly: SCNNode?
+        var core: SCNNode?
+        var legend: SCNNode?
         var lastKey = ""
+        var lastPose = ""
+        var freezeWork: DispatchWorkItem?
 
         func build(in view: SCNView, compact: Bool) {
             let scene = SCNScene()
             view.scene = scene
             scene.lightingEnvironment.contents = Self.studioIBL()
-            scene.lightingEnvironment.intensity = 0.20
+            scene.lightingEnvironment.intensity = 0.28
 
             let camera = SCNCamera()
-            camera.fieldOfView = compact ? 32 : 33
+            camera.fieldOfView = compact ? 32 : 34
             camera.zNear = 0.05
             camera.zFar = 40
             camera.wantsHDR = false
             let camNode = SCNNode()
             camNode.camera = camera
             camNode.position = compact
-                ? SCNVector3(-0.14, 0.38, 2.38)
-                : SCNVector3(-0.16, 0.46, 2.82)
+                ? SCNVector3(-0.12, 0.42, 2.30)
+                : SCNVector3(-0.14, 0.52, 2.72)
             camNode.look(at: SCNVector3(0, 0.02, 0))
             scene.rootNode.addChildNode(camNode)
 
             let ambient = SCNNode()
             ambient.light = SCNLight()
             ambient.light?.type = .ambient
-            ambient.light?.intensity = 64
-            ambient.light?.color = NSColor(calibratedWhite: 0.36, alpha: 1)
+            ambient.light?.intensity = 90
+            ambient.light?.color = NSColor(calibratedWhite: 0.42, alpha: 1)
             scene.rootNode.addChildNode(ambient)
 
             let key = SCNNode()
             key.light = SCNLight()
             key.light?.type = .directional
-            key.light?.intensity = 155
-            key.light?.color = NSColor(calibratedRed: 1.00, green: 0.97, blue: 0.93, alpha: 1)
-            key.position = SCNVector3(1.1, 3.1, 1.8)
+            key.light?.intensity = 140
+            key.light?.color = NSColor(calibratedRed: 1.00, green: 0.98, blue: 0.95, alpha: 1)
+            key.position = SCNVector3(1.0, 2.8, 2.0)
             key.look(at: SCNVector3(0, 0, 0))
             scene.rootNode.addChildNode(key)
 
-            let bounce = SCNNode()
-            bounce.light = SCNLight()
-            bounce.light?.type = .omni
-            bounce.light?.intensity = 22
-            bounce.light?.color = NSColor(calibratedRed: 0.90, green: 0.88, blue: 0.84, alpha: 1)
-            bounce.position = SCNVector3(0.15, -1.5, 1.3)
-            scene.rootNode.addChildNode(bounce)
+            let fill = SCNNode()
+            fill.light = SCNLight()
+            fill.light?.type = .omni
+            fill.light?.intensity = 36
+            fill.light?.color = NSColor(calibratedRed: 0.92, green: 0.96, blue: 1.0, alpha: 1)
+            fill.position = SCNVector3(-1.2, 0.4, 1.6)
+            scene.rootNode.addChildNode(fill)
 
-            let rim = SCNNode()
-            rim.light = SCNLight()
-            rim.light?.type = .directional
-            rim.light?.intensity = 36
-            rim.light?.color = NSColor(calibratedRed: 0.78, green: 0.84, blue: 0.94, alpha: 1)
-            rim.position = SCNVector3(-2.3, 1.5, -1.3)
-            rim.look(at: SCNVector3(0, 0, 0))
-            scene.rootNode.addChildNode(rim)
+            let root = SCNNode()
+            scene.rootNode.addChildNode(root)
+            jelly = root
 
-            let geo = Self.tokenGeometry(compact: compact)
-            let brickNode = SCNNode(geometry: geo)
-            scene.rootNode.addChildNode(brickNode)
-            brick = brickNode
+            let body = SCNNode(geometry: Self.jellyGeometry(compact: compact, radiusBoost: 0))
+            body.name = "body"
+            root.addChildNode(body)
 
-            let shadow = SCNPlane(width: compact ? 1.62 : 2.15, height: compact ? 1.28 : 1.68)
+            let inner = SCNNode(geometry: Self.jellyGeometry(compact: compact, radiusBoost: 0.02))
+            inner.scale = SCNVector3(0.62, 0.58, 0.62)
+            inner.name = "core"
+            root.addChildNode(inner)
+            core = inner
+
+            let plate = SCNPlane(width: compact ? 0.92 : 1.18, height: compact ? 0.62 : 0.78)
+            plate.cornerRadius = compact ? 0.18 : 0.24
+            let legendNode = SCNNode(geometry: plate)
+            legendNode.position = SCNVector3(0, compact ? 0.02 : 0.04, compact ? 0.34 : 0.44)
+            legendNode.name = "legend"
+            root.addChildNode(legendNode)
+            legend = legendNode
+
+            let shadow = SCNPlane(width: compact ? 1.55 : 2.05, height: compact ? 1.18 : 1.55)
             let sm = SCNMaterial()
             sm.diffuse.contents = NSColor.black
             sm.transparency = 0.22
@@ -110,7 +126,7 @@ struct BrickSceneView: NSViewRepresentable {
             shadow.materials = [sm]
             let shadowNode = SCNNode(geometry: shadow)
             shadowNode.eulerAngles.x = -.pi / 2
-            shadowNode.position = SCNVector3(0.12, compact ? -0.54 : -0.68, 0.08)
+            shadowNode.position = SCNVector3(0.10, compact ? -0.48 : -0.60, 0.06)
             scene.rootNode.addChildNode(shadowNode)
         }
 
@@ -121,136 +137,175 @@ struct BrickSceneView: NSViewRepresentable {
             count: String,
             hovered: Bool,
             selected: Bool,
-            compact: Bool
+            pressed: Bool,
+            compact: Bool,
+            view: SCNView
         ) {
-            guard let brick else { return }
+            guard let jelly else { return }
             let rgb = color.usingColorSpace(.deviceRGB) ?? color
             let key = "\(code)|\(name)|\(count)|\(compact)|\(rgb.redComponent)|\(rgb.greenComponent)|\(rgb.blueComponent)"
             if key != lastKey {
                 lastKey = key
-                brick.geometry?.materials = Self.brickMaterials(
-                    color: rgb, code: code, name: name, count: count, compact: compact
-                )
+                if let body = jelly.childNode(withName: "body", recursively: false) {
+                    body.geometry?.materials = [Self.gelatin(rgb, inner: false)]
+                }
+                core?.geometry?.materials = [Self.gelatin(Self.darker(rgb), inner: true)]
+                legend?.geometry?.materials = [Self.letterPlate(color: rgb, code: code, name: name, count: count, compact: compact)]
             }
 
-            let lift: CGFloat = hovered ? (compact ? 0.10 : 0.14) : (selected ? 0.06 : 0)
+            let pose = "\(pressed)-\(hovered)-\(selected)"
+            guard pose != lastPose else { return }
+            lastPose = pose
+
+            let scale: SCNVector3
+            let y: CGFloat
+            if pressed {
+                scale = SCNVector3(1.34, 0.52, 1.34)
+                y = compact ? -0.10 : -0.14
+            } else if hovered {
+                scale = SCNVector3(1.05, 1.07, 1.05)
+                y = compact ? 0.05 : 0.07
+            } else if selected {
+                scale = SCNVector3(1.03, 0.97, 1.03)
+                y = 0.02
+            } else {
+                scale = SCNVector3(1, 1, 1)
+                y = 0
+            }
+
+            view.isPlaying = true
+            view.rendersContinuously = true
+            freezeWork?.cancel()
+
             SCNTransaction.begin()
-            SCNTransaction.animationDuration = 0.18
-            brick.position.y = lift
-            brick.eulerAngles = SCNVector3(
-                hovered ? -0.03 : 0,
-                hovered ? -0.04 : 0,
-                0
+            SCNTransaction.animationDuration = pressed ? 0.10 : 0.48
+            SCNTransaction.animationTimingFunction = CAMediaTimingFunction(
+                controlPoints: pressed ? 0.15 : 0.22,
+                pressed ? 0.90 : 1.70,
+                0.28,
+                1.00
             )
+            jelly.scale = scale
+            jelly.position.y = y
+            jelly.eulerAngles = SCNVector3(pressed ? 0.04 : (hovered ? -0.03 : 0), hovered && !pressed ? -0.04 : 0, 0)
             SCNTransaction.commit()
+
+            jelly.removeAction(forKey: "wobble")
+            if hovered && !pressed {
+                let wobble = SCNAction.repeatForever(
+                    SCNAction.sequence([
+                        SCNAction.customAction(duration: 0.55) { node, t in
+                            let u = sin(Double(t) / 0.55 * .pi)
+                            node.scale = SCNVector3(1.05 + 0.03 * u, 1.07 - 0.035 * u, 1.05 + 0.03 * u)
+                        },
+                        SCNAction.customAction(duration: 0.55) { node, t in
+                            let u = sin(Double(t) / 0.55 * .pi)
+                            node.scale = SCNVector3(1.08 - 0.03 * u, 1.035 + 0.035 * u, 1.08 - 0.03 * u)
+                        },
+                    ])
+                )
+                jelly.runAction(wobble, forKey: "wobble")
+            }
+
+            if !pressed && !hovered {
+                let work = DispatchWorkItem { [weak view] in
+                    view?.isPlaying = false
+                    view?.rendersContinuously = false
+                }
+                freezeWork = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: work)
+            }
         }
 
-        static func brickMaterials(
+        static func gelatin(_ color: NSColor, inner: Bool) -> SCNMaterial {
+            let mat = SCNMaterial()
+            mat.diffuse.contents = color
+            mat.ambient.contents = color
+            mat.locksAmbientWithDiffuse = true
+            mat.roughness.contents = inner ? 0.35 : 0.16
+            mat.metalness.contents = 0.0
+            mat.specular.contents = NSColor(calibratedWhite: inner ? 0.18 : 0.55, alpha: 1)
+            mat.shininess = inner ? 0.2 : 0.85
+            mat.lightingModel = .physicallyBased
+            mat.clearCoat.contents = inner ? 0.05 : 0.55
+            mat.clearCoatRoughness.contents = 0.12
+            mat.fresnelExponent = 1.4
+            mat.transparency = inner ? 0.92 : 0.62
+            mat.transparencyMode = .singleLayer
+            mat.blendMode = .alpha
+            mat.isDoubleSided = true
+            mat.writesToDepthBuffer = true
+            mat.emission.contents = color.withAlphaComponent(inner ? 0.10 : 0.16)
+            mat.shaderModifiers = [
+                .surface: """
+                float ndotv = max(dot(_surface.normal, _surface.view), 0.0);
+                float rim = pow(clamp(1.0 - ndotv, 0.0, 1.0), 2.4);
+                vec3 n = _surface.normal;
+                float phase = n.x * 2.4 + n.y * 3.1 + n.z * 1.2;
+                vec3 oil = vec3(
+                    0.55 + 0.45 * sin(phase),
+                    0.55 + 0.45 * sin(phase + 2.094),
+                    0.55 + 0.45 * sin(phase + 4.188)
+                );
+                _surface.emission += vec4(oil * rim * 0.16, 0.0);
+                _surface.reflective = vec4(mix(vec3(0.55), oil, 0.45) * rim * 0.55, 1.0);
+                _surface.transparent.a = mix(_surface.transparent.a, 0.28, rim * 0.55);
+                """
+            ]
+            return mat
+        }
+
+        static func letterPlate(
             color: NSColor,
             code: String,
             name: String,
             count: String,
             compact: Bool
-        ) -> [SCNMaterial] {
-            let shell = ceramic(color)
-            let front = ceramic(color)
-            front.diffuse.contents = paintFace(
-                color: color, code: code, name: name, count: count, compact: compact
-            )
-            front.diffuse.magnificationFilter = .linear
-            front.diffuse.minificationFilter = .linear
-            front.diffuse.mipFilter = .linear
-            front.diffuse.maxAnisotropy = 16
-            front.shaderModifiers = Self.faceGlaze
-            return [front, shell, shell, shell, shell, shell]
-        }
-
-        static func ceramic(_ color: NSColor) -> SCNMaterial {
+        ) -> SCNMaterial {
             let mat = SCNMaterial()
-            mat.diffuse.contents = color
-            mat.ambient.contents = color
-            mat.locksAmbientWithDiffuse = true
-            mat.roughness.contents = 0.62
-            mat.metalness.contents = 0.0
-            mat.specular.contents = NSColor(calibratedWhite: 0.07, alpha: 1)
-            mat.shininess = 0.07
-            mat.lightingModel = .physicallyBased
-            mat.clearCoat.contents = 0.10
-            mat.clearCoatRoughness.contents = 0.42
-            mat.fresnelExponent = 3.4
-            mat.shaderModifiers = rimGlaze
+            let image = paintLetters(color: color, code: code, name: name, count: count, compact: compact)
+            mat.diffuse.contents = image
+            mat.transparent.contents = image
+            mat.transparencyMode = .aOne
+            mat.lightingModel = .constant
+            mat.writesToDepthBuffer = false
+            mat.blendMode = .alpha
+            mat.isDoubleSided = false
             return mat
         }
 
-        static let rimGlaze: [SCNShaderModifierEntryPoint: String] = [
-            .surface: """
-            float ndotv = max(dot(_surface.normal, _surface.view), 0.0);
-            float rim = pow(clamp(1.0 - ndotv, 0.0, 1.0), 3.8);
-            float band = pow(clamp(1.0 - ndotv, 0.0, 1.0), 2.6);
-            vec3 n = _surface.normal;
-            float phase = n.x * 3.1 + n.y * 4.2 + n.z * 1.7;
-            vec3 oil = vec3(
-                0.50 + 0.50 * sin(phase),
-                0.50 + 0.50 * sin(phase + 2.094),
-                0.50 + 0.50 * sin(phase + 4.188)
-            );
-            _surface.diffuse.rgb = mix(_surface.diffuse.rgb, oil, rim * 0.50);
-            _surface.emission = vec4(oil * rim * 0.18, 0.0);
-            _surface.reflective = vec4(oil * band * 0.30, 1.0);
-            """
-        ]
-
-        static let faceGlaze: [SCNShaderModifierEntryPoint: String] = [
-            .surface: """
-            float ndotv = max(dot(_surface.normal, _surface.view), 0.0);
-            float rim = pow(clamp(1.0 - ndotv, 0.0, 1.0), 4.4);
-            vec3 n = _surface.normal;
-            float phase = n.x * 3.1 + n.y * 4.2 + n.z * 1.7;
-            vec3 oil = vec3(
-                0.50 + 0.50 * sin(phase),
-                0.50 + 0.50 * sin(phase + 2.094),
-                0.50 + 0.50 * sin(phase + 4.188)
-            );
-            _surface.emission = vec4(oil * rim * 0.10, 0.0);
-            _surface.reflective = vec4(oil * rim * 0.16, 1.0);
-            """
-        ]
-
-        static func tokenGeometry(compact: Bool) -> SCNGeometry {
-            let hw: CGFloat = compact ? 0.62 : 0.80
-            let hh: CGFloat = compact ? 0.42 : 0.52
-            let hd: CGFloat = compact ? 0.38 : 0.48
-            let radius: CGFloat = compact ? 0.20 : 0.26
-            let taper: CGFloat = 0.16
-            let crown: CGFloat = compact ? 0.028 : 0.042
-            let segs = compact ? 12 : 16
-            return makeToken(
-                hw: hw, hh: hh, hd: hd,
-                radius: radius, taper: taper, crown: crown, segs: segs
+        static func darker(_ color: NSColor) -> NSColor {
+            let c = color.usingColorSpace(.deviceRGB) ?? color
+            return NSColor(
+                calibratedRed: max(0, c.redComponent * 0.72),
+                green: max(0, c.greenComponent * 0.72),
+                blue: max(0, c.blueComponent * 0.72),
+                alpha: 1
             )
         }
 
-        static func scaleAtZ(_ z: CGFloat, hd: CGFloat, taper: CGFloat) -> CGFloat {
-            let t = (z / max(hd, 0.001) + 1) * 0.5
-            return (1 - taper) + taper * t
+        static func jellyGeometry(compact: Bool, radiusBoost: CGFloat) -> SCNGeometry {
+            let hw: CGFloat = compact ? 0.58 : 0.74
+            let hh: CGFloat = compact ? 0.40 : 0.50
+            let hd: CGFloat = compact ? 0.36 : 0.46
+            let radius: CGFloat = (compact ? 0.28 : 0.36) + radiusBoost
+            return makeJelly(hw: hw, hh: hh, hd: hd, radius: radius, segs: compact ? 10 : 14)
         }
 
         static func project(
             _ p: SCNVector3,
             hw: CGFloat, hh: CGFloat, hd: CGFloat,
-            radius: CGFloat, taper: CGFloat
+            radius: CGFloat
         ) -> (SCNVector3, SCNVector3) {
-            let s = scaleAtZ(p.z, hd: hd, taper: taper)
-            let r = min(radius, hw * s * 0.72, hh * s * 0.72, hd * 0.72)
-            let ix = max(hw * s - r, 0.02)
-            let iy = max(hh * s - r, 0.02)
+            let flare = 1 + 0.10 * max(0, (-p.y / max(hh, 0.001) + 1) * 0.5)
+            let r = min(radius, hw * flare * 0.78, hh * 0.78, hd * 0.78)
+            let ix = max(hw * flare - r, 0.02)
+            let iy = max(hh - r, 0.02)
             let iz = max(hd - r, 0.02)
             let cx = min(max(p.x, -ix), ix)
             let cy = min(max(p.y, -iy), iy)
             let cz = min(max(p.z, -iz), iz)
-            let dx = p.x - cx
-            let dy = p.y - cy
-            let dz = p.z - cz
+            let dx = p.x - cx, dy = p.y - cy, dz = p.z - cz
             let len = sqrt(dx * dx + dy * dy + dz * dz)
             if len < 1e-5 {
                 let ax = abs(p.x), ay = abs(p.y), az = abs(p.z)
@@ -258,44 +313,33 @@ struct BrickSceneView: NSViewRepresentable {
                 if ax >= ay && ax >= az { n.x = p.x >= 0 ? 1 : -1 }
                 else if ay >= az { n.y = p.y >= 0 ? 1 : -1 }
                 else { n.z = p.z >= 0 ? 1 : -1 }
-                return (SCNVector3(p.x, p.y, p.z), n)
+                return (p, n)
             }
             let n = SCNVector3(dx / len, dy / len, dz / len)
             return (SCNVector3(cx + n.x * r, cy + n.y * r, cz + n.z * r), n)
         }
 
-        static func makeToken(
+        static func makeJelly(
             hw: CGFloat, hh: CGFloat, hd: CGFloat,
-            radius: CGFloat, taper: CGFloat, crown: CGFloat, segs: Int
+            radius: CGFloat, segs: Int
         ) -> SCNGeometry {
             var positions: [SCNVector3] = []
             var normals: [SCNVector3] = []
             var uvs: [CGPoint] = []
             var elements: [SCNGeometryElement] = []
 
-            func emitFace(samples: [(SCNVector3, CGPoint)], pillow: Bool) {
+            func emitFace(samples: [(SCNVector3, CGPoint)]) {
                 let start = UInt32(positions.count)
-                let n = segs
                 for sample in samples {
-                    var p = sample.0
-                    var (pos, nor) = project(p, hw: hw, hh: hh, hd: hd, radius: radius, taper: taper)
-                    if pillow {
-                        let nx = pos.x / max(hw, 0.001)
-                        let ny = pos.y / max(hh, 0.001)
-                        let lift = crown * max(0, 1 - nx * nx) * max(0, 1 - ny * ny)
-                        pos.z += lift
-                        nor.z += lift * 3
-                        let nl = max(0.0001, sqrt(nor.x * nor.x + nor.y * nor.y + nor.z * nor.z))
-                        nor = SCNVector3(nor.x / nl, nor.y / nl, nor.z / nl)
-                    }
+                    let (pos, nor) = project(sample.0, hw: hw, hh: hh, hd: hd, radius: radius)
                     positions.append(pos)
                     normals.append(nor)
                     uvs.append(sample.1)
                 }
                 var idx: [UInt32] = []
-                let row = UInt32(n + 1)
-                for j in 0..<UInt32(n) {
-                    for i in 0..<UInt32(n) {
+                let row = UInt32(segs + 1)
+                for j in 0..<UInt32(segs) {
+                    for i in 0..<UInt32(segs) {
                         let a = start + j * row + i
                         let b = a + 1
                         let c = a + row
@@ -318,42 +362,14 @@ struct BrickSceneView: NSViewRepresentable {
                 return out
             }
 
-            // Front +z, Right +x, Back -z, Left -x, Top +y, Bottom -y
-            emitFace(samples: grid { u, v in
-                let s = scaleAtZ(hd, hd: hd, taper: taper)
-                return SCNVector3(u * hw * s, v * hh * s, hd)
-            }, pillow: true)
+            emitFace(samples: grid { u, v in SCNVector3(u * hw, v * hh, hd) })
+            emitFace(samples: grid { u, v in SCNVector3(hw, v * hh, -u * hd) })
+            emitFace(samples: grid { u, v in SCNVector3(-u * hw, v * hh, -hd) })
+            emitFace(samples: grid { u, v in SCNVector3(-hw, v * hh, u * hd) })
+            emitFace(samples: grid { u, v in SCNVector3(u * hw, hh, -v * hd) })
+            emitFace(samples: grid { u, v in SCNVector3(u * hw, -hh, v * hd) })
 
-            emitFace(samples: grid { u, v in
-                let z = -u * hd
-                let s = scaleAtZ(z, hd: hd, taper: taper)
-                return SCNVector3(hw * s, v * hh * s, z)
-            }, pillow: false)
-
-            emitFace(samples: grid { u, v in
-                let s = scaleAtZ(-hd, hd: hd, taper: taper)
-                return SCNVector3(-u * hw * s, v * hh * s, -hd)
-            }, pillow: false)
-
-            emitFace(samples: grid { u, v in
-                let z = u * hd
-                let s = scaleAtZ(z, hd: hd, taper: taper)
-                return SCNVector3(-hw * s, v * hh * s, z)
-            }, pillow: false)
-
-            emitFace(samples: grid { u, v in
-                let z = -v * hd
-                let s = scaleAtZ(z, hd: hd, taper: taper)
-                return SCNVector3(u * hw * s, hh * s, z)
-            }, pillow: false)
-
-            emitFace(samples: grid { u, v in
-                let z = v * hd
-                let s = scaleAtZ(z, hd: hd, taper: taper)
-                return SCNVector3(u * hw * s, -hh * s, z)
-            }, pillow: false)
-
-            let geo = SCNGeometry(
+            return SCNGeometry(
                 sources: [
                     SCNGeometrySource(vertices: positions),
                     SCNGeometrySource(normals: normals),
@@ -361,10 +377,9 @@ struct BrickSceneView: NSViewRepresentable {
                 ],
                 elements: elements
             )
-            return geo
         }
 
-        static func paintFace(
+        static func paintLetters(
             color: NSColor,
             code: String,
             name: String,
@@ -372,16 +387,19 @@ struct BrickSceneView: NSViewRepresentable {
             compact: Bool
         ) -> NSImage {
             let size = NSSize(width: 2048, height: 1280)
-            return NSImage(size: size, flipped: true) { rect in
+            let image = NSImage(size: size, flipped: true) { rect in
                 NSGraphicsContext.current?.shouldAntialias = true
                 NSGraphicsContext.current?.imageInterpolation = .high
-                color.setFill()
+                NSColor.clear.setFill()
                 rect.fill()
                 let paragraph = NSMutableParagraphStyle()
                 paragraph.alignment = .center
-                let ink = NSColor(calibratedWhite: 0.11, alpha: 0.90)
-                let mute = NSColor(calibratedWhite: 0.12, alpha: 0.58)
-                let monogram = Self.displayFont(size: compact ? 500 : 390)
+                let ink = NSColor(calibratedWhite: 0.08, alpha: 0.88)
+                let mute = NSColor(calibratedWhite: 0.10, alpha: 0.62)
+                let shadow = NSShadow()
+                shadow.shadowColor = NSColor.white.withAlphaComponent(0.18)
+                shadow.shadowBlurRadius = 8
+                let monogram = displayFont(size: compact ? 500 : 390)
                 if compact {
                     (code as NSString).draw(
                         in: NSRect(x: 80, y: 240, width: 1888, height: 800),
@@ -390,6 +408,7 @@ struct BrickSceneView: NSViewRepresentable {
                             .foregroundColor: ink,
                             .paragraphStyle: paragraph,
                             .kern: 6,
+                            .shadow: shadow,
                         ]
                     )
                 } else {
@@ -400,6 +419,7 @@ struct BrickSceneView: NSViewRepresentable {
                             .foregroundColor: ink,
                             .paragraphStyle: paragraph,
                             .kern: 4,
+                            .shadow: shadow,
                         ]
                     )
                     (name as NSString).draw(
@@ -421,6 +441,7 @@ struct BrickSceneView: NSViewRepresentable {
                 }
                 return true
             }
+            return image
         }
 
         static func displayFont(size: CGFloat) -> NSFont {
@@ -434,8 +455,8 @@ struct BrickSceneView: NSViewRepresentable {
             let size = NSSize(width: 64, height: 32)
             return NSImage(size: size, flipped: false) { rect in
                 NSGradient(colors: [
-                    NSColor(calibratedRed: 0.58, green: 0.60, blue: 0.64, alpha: 1),
-                    NSColor(calibratedRed: 0.18, green: 0.17, blue: 0.16, alpha: 1),
+                    NSColor(calibratedRed: 0.70, green: 0.78, blue: 0.86, alpha: 1),
+                    NSColor(calibratedRed: 0.16, green: 0.16, blue: 0.16, alpha: 1),
                 ])?.draw(in: rect, angle: -90)
                 return true
             }
