@@ -156,7 +156,6 @@ struct WeekRing: View {
 struct MainDesk: View {
     @Environment(HomeworkStore.self) private var store
     @Binding var hoveredBrick: String?
-    @State private var pressedBrick: String?
     private let hour = Calendar.current.component(.hour, from: Date())
     var body: some View {
         ScrollView {
@@ -181,23 +180,15 @@ struct MainDesk: View {
                                     name: subject.name,
                                     count: open == 0 ? "Clear" : "\(open) open",
                                     hovered: hoveredBrick == subject.id,
-                                    selected: store.selectedSubjectId == subject.id,
-                                    pressed: pressedBrick == subject.id
+                                    selected: store.selectedSubjectId == subject.id
                                 )
-                                .frame(height: store.sortedSubjects.count > 8 ? 168 : 210)
+                                .frame(height: store.sortedSubjects.count > 8 ? 196 : 248)
                                 .contentShape(Rectangle())
                                 .onHover { inside in
                                     hoveredBrick = inside ? subject.id : (hoveredBrick == subject.id ? nil : hoveredBrick)
                                 }
                             }
                             .buttonStyle(.plain)
-                            .simultaneousGesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onChanged { _ in pressedBrick = subject.id }
-                                    .onEnded { _ in
-                                        if pressedBrick == subject.id { pressedBrick = nil }
-                                    }
-                            )
                         }
                         Button {
                             store.sheet = .subjects
