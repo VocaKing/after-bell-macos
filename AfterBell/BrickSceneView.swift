@@ -358,7 +358,19 @@ struct JellyMesh {
     var shell: [UInt32] = []
     var tris: [(Int, Int, Int)] = []
 
+    init() {}
+
     init(half: Float, radius: Float, segs: Int) {
+        self = JellyMesh.make(half: half, radius: radius, segs: segs)
+    }
+
+    static func make(half: Float, radius: Float, segs: Int) -> JellyMesh {
+        var rest: [SIMD3<Float>] = []
+        var normal: [SIMD3<Float>] = []
+        var uv: [CGPoint] = []
+        var neighbors: [[Int]] = []
+        var tris: [(Int, Int, Int)] = []
+
         func project(_ p: SIMD3<Float>) -> (SIMD3<Float>, SIMD3<Float>) {
             let r = min(radius, half * 0.82)
             let inner = max(half - r, 0.02)
@@ -377,6 +389,12 @@ struct JellyMesh {
             return (c + n * r, n)
         }
 
+        func link(_ a: Int, _ b: Int) {
+            if a == b { return }
+            if !neighbors[a].contains(b) { neighbors[a].append(b) }
+            if !neighbors[b].contains(a) { neighbors[b].append(a) }
+        }
+
         func emit(_ point: (Float, Float) -> SIMD3<Float>) -> [UInt32] {
             var bucket: [UInt32] = []
             let start = rest.count
@@ -386,8 +404,6 @@ struct JellyMesh {
                     let u = Float(i) / Float(segs)
                     let (p, n) = project(point(u * 2 - 1, v * 2 - 1))
                     rest.append(p)
-                    pos.append(p)
-                    vel.append(.zero)
                     normal.append(n)
                     uv.append(CGPoint(x: CGFloat(u), y: CGFloat(1 - v)))
                     neighbors.append([])
@@ -403,63 +419,67 @@ struct JellyMesh {
                     bucket.append(contentsOf: [UInt32(a), UInt32(b), UInt32(c), UInt32(b), UInt32(d), UInt32(c)])
                     tris.append((a, b, c))
                     tris.append((b, d, c))
-                    link(a, b); link(a, c); link(b, d); link(c, d)
+                    link(a, b)
+                    link(a, c)
+                    link(b, d)
+                    link(c, d)
                 }
             }
             return bucket
         }
 
-        let faceIndices = emit { u, v in SIMD3(u * half, v * half, half) }
+        let face = emit { u, v in SIMD3(u * half, v * half, half) }
         let right = emit { u, v in SIMD3(half, v * half, -u * half) }
         let back = emit { u, v in SIMD3(-u * half, v * half, -half) }
         let left = emit { u, v in SIMD3(-half, v * half, u * half) }
         let top = emit { u, v in SIMD3(u * half, half, -v * half) }
         let bottom = emit { u, v in SIMD3(u * half, -half, v * half) }
-        front = faceIndices
-        shell = right + back + left + top + bottom
-        weldEdges()
-        recomputeNormals()
-    }
 
-    mutating func link(_ a: Int, _ b: Int) {
-        if a == b { return }
-        if !neighbors[a].contains(b) { neighbors[a].append(b) }
-        if !neighbors[b].contains(a) { neighbors[b].append(a) }
-    }
-
-    mutating func weldEdges() {
-        let n = rest.count
         let cell: Float = 0.02
         var buckets: [Int: [Int]] = [:]
-        func bucket(_ p: SIMD3<Float>) -> Int {
-            let x = Int(p.x / cell)
-            let y = Int(p.y / cell)
-            let z = Int(p.z / cell)
+        func key(_ p: SIMD3<Float>) -> Int {
+            let x = Int(p.x / cell), y = Int(p.y / cell), z = Int(p.z / cell)
             return (x + 80) * 20000 + (y + 80) * 200 + (z + 80)
         }
-        for i in 0..<n {
-            buckets[bucket(rest[i]), default: []].append(i)
+        for i in 0..<rest.count {
+            buckets[key(rest[i]), default: []].append(i)
         }
-        for i in 0..<n {
-            let x = Int(rest[i].x / cell)
-            let y = Int(rest[i].y / cell)
-            let z = Int(rest[i].z / cell)
+        for i in 0..<rest.count {
+            let x = Int(rest[i].x / cell), y = Int(rest[i].y / cell), z = Int(rest[i].z / cell)
             for dx in -1...1 {
                 for dy in -1...1 {
                     for dz in -1...1 {
-                        let key = (x + dx + 80) * 20000 + (y + dy + 80) * 200 + (z + dz + 80)
-                        guard let list = buckets[key] else { continue }
-                        for j in list where j > i {
-                            if simd_length(rest[i] - rest[j]) < 0.012 { link(i, j) }
+                        let slot = (x + dx + 80) * 20000 + (y + dy + 80) * 200 + (z + dz + 80)
+                        guard let list = buckets[slot] else { continue }
+                        for j in list where j > i && simd_length(rest[i] - rest[j]) < 0.012 {
+                            link(i, j)
                         }
                     }
                 }
             }
         }
+
+        var mesh = JellyMesh()
+        mesh.rest = rest
+        mesh.pos = rest
+        mesh.vel = Array(repeating: .zero, count: rest.count)
+        mesh.normal = normal
+        mesh.uv = uv
+        mesh.neighbors = neighbors
+        mesh.front = face
+        mesh.shell = right + back + left + top + bottom
+        mesh.tris = tris
+        mesh.recomputeNormals()
+        return mesh
     }
 
     mutating func step(h: Float, env: Float, hoverTime: Float, rope: SIMD3<Float>, click: SIMD3<Float>, clickAmp: Float, clickAge: Float) {
-        let n = pos.count
+        let rest = self.rest
+        let neighbors = self.neighbors
+        let n = rest.count
+        var pos = self.pos
+        var vel = self.vel
+        let normal = self.normal
         var target = rest
         for i in 0..<n {
             let r = rest[i]
@@ -476,21 +496,18 @@ struct JellyMesh {
             let pinch = lift * 1.2
             t.x *= 1 - pinch * (0.3 + 0.7 * center)
             t.z *= 1 - pinch * (0.3 + 0.7 * center)
-
             let cd = simd_length(r - click)
             let ripple = sin(cd * 16 - clickAge * 17) * exp(-cd * 2.5) * exp(-clickAge * 1.55)
             t += normal[i] * ripple * clickAmp * 0.22
             target[i] = t
         }
-
         for i in 0..<n {
             var f = (target[i] - pos[i]) * 55 - vel[i] * 7.2
             if !neighbors[i].isEmpty {
                 var avg = SIMD3<Float>(repeating: 0)
                 for j in neighbors[i] { avg += pos[j] - rest[j] }
                 avg /= Float(neighbors[i].count)
-                let own = pos[i] - rest[i]
-                f += (avg - own) * 38
+                f += (avg - (pos[i] - rest[i])) * 38
             }
             vel[i] += f * h
             pos[i] += vel[i] * h
@@ -501,6 +518,8 @@ struct JellyMesh {
                 vel[i] *= 0.45
             }
         }
+        self.pos = pos
+        self.vel = vel
     }
 
     func energy() -> Float {
@@ -510,14 +529,18 @@ struct JellyMesh {
     }
 
     mutating func recomputeNormals() {
+        let pos = self.pos
+        let rest = self.rest
+        let tris = self.tris
         var acc = [SIMD3<Float>](repeating: .zero, count: pos.count)
         for tri in tris {
-            let a = pos[tri.0], b = pos[tri.1], c = pos[tri.2]
-            let n = simd_cross(b - a, c - a)
+            let n = simd_cross(pos[tri.1] - pos[tri.0], pos[tri.2] - pos[tri.0])
             acc[tri.0] += n
             acc[tri.1] += n
             acc[tri.2] += n
         }
+        var normal = self.normal
+        if normal.count != acc.count { normal = Array(repeating: .zero, count: acc.count) }
         for i in 0..<acc.count {
             let len = simd_length(acc[i])
             if len > 1e-6 {
@@ -526,6 +549,7 @@ struct JellyMesh {
                 normal[i] = n
             }
         }
+        self.normal = normal
     }
 
     func makeGeometry() -> SCNGeometry {
@@ -533,6 +557,8 @@ struct JellyMesh {
     }
 
     func makeCoreGeometry(scale: Float) -> SCNGeometry {
+        let rest = self.rest
+        let pos = self.pos
         var inner = rest
         for i in 0..<rest.count {
             inner[i] = rest[i] * scale + (pos[i] - rest[i]) * (scale + 0.12)
@@ -541,6 +567,10 @@ struct JellyMesh {
     }
 
     func geometry(positions: [SIMD3<Float>]) -> SCNGeometry {
+        let normal = self.normal
+        let uv = self.uv
+        let front = self.front
+        let shell = self.shell
         var verts: [SCNVector3] = []
         var norms: [SCNVector3] = []
         verts.reserveCapacity(positions.count)
