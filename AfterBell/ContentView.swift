@@ -158,6 +158,9 @@ struct MainDesk: View {
     @Environment(HomeworkStore.self) private var store
     @Binding var hoveredBrick: String?
     @Binding var hoverPoint: CGPoint
+    @State private var clickID = ""
+    @State private var clickAt = CGPoint.zero
+    @State private var clickToken = 0
     private let hour = Calendar.current.component(.hour, from: Date())
     var body: some View {
         ScrollView {
@@ -184,6 +187,8 @@ struct MainDesk: View {
                                     count: open == 0 ? "Clear" : "\(open) open",
                                     hovered: hoveredBrick == subject.id,
                                     pointer: hoveredBrick == subject.id ? hoverPoint : nil,
+                                    clickToken: clickID == subject.id ? clickToken : 0,
+                                    clickAt: clickID == subject.id ? clickAt : nil,
                                     selected: store.selectedSubjectId == subject.id
                                 )
                                 .frame(height: store.sortedSubjects.count > 8 ? 210 : 270)
@@ -197,6 +202,14 @@ struct MainDesk: View {
                                         if hoveredBrick == subject.id { hoveredBrick = nil }
                                     }
                                 }
+                                .simultaneousGesture(
+                                    DragGesture(minimumDistance: 0)
+                                        .onEnded { value in
+                                            clickID = subject.id
+                                            clickAt = value.location
+                                            clickToken += 1
+                                        }
+                                )
                             }
                             .buttonStyle(.plain)
                         }
