@@ -161,7 +161,7 @@ struct BrickSceneView: NSViewRepresentable {
             labelNode = SCNNode()
             labelNode.name = "label"
             labelNode.renderingOrder = 200
-            labelNode.categoryBitMask = 0
+            labelNode.categoryBitMask = 1
             labelNode.position = SCNVector3(0, 0.02, 0.78)
             scene.rootNode.addChildNode(labelNode)
 
@@ -254,10 +254,12 @@ struct BrickSceneView: NSViewRepresentable {
             clickAmp = 1
             clickAge = 0
             let n = mesh.pos.count
+            let spot = SIMD2<Float>(point.x, point.y)
             for i in 0..<n {
-                let d = simd_length(mesh.rest[i] - point)
-                let w = exp(-d * d * 14)
-                mesh.vel[i] += mesh.normal[i] * w * 8
+                let d = simd_length(SIMD2(mesh.rest[i].x, mesh.rest[i].y) - spot)
+                let w = exp(-d * d * 8)
+                let toward = simd_normalize(SIMD3<Float>(-0.1, 0.55, 3.1) - mesh.rest[i])
+                mesh.vel[i] += toward * w * 3.2
             }
             wake()
         }
@@ -295,7 +297,7 @@ struct BrickSceneView: NSViewRepresentable {
             let target: Float = hovering ? 1 : 0
             envVel += ((target - env) * 180 - envVel * 12) * dt
             env += envVel * dt
-            clickAmp *= exp(-2.6 * dt)
+            clickAmp *= exp(-1.15 * dt)
             clickAge += dt
 
             let moving = abs(env) > 0.01 || abs(envVel) > 0.01 || clickAmp > 0.02 || mesh.energy() > 0.0004
@@ -768,9 +770,9 @@ struct JellyMesh {
             let cam = SIMD3<Float>(-0.1, 0.55, 3.1)
             let toward = simd_normalize(cam - r)
             var t = r + toward * pull
-            let cd = simd_length(r - click)
-            let ripple = sin(cd * 18 - clickAge * 26) * exp(-cd * 2.2) * exp(-clickAge * 2.1)
-            t += normal[i] * ripple * clickAmp * 0.62
+            let cd = simd_length(SIMD2(r.x - click.x, r.y - click.y))
+            let ripple = sin(cd * 14 - clickAge * 16) * exp(-cd * 1.7) * exp(-clickAge * 1.15)
+            t += toward * max(0, ripple) * clickAmp * 0.48
             target[i] = t
         }
         for i in 0..<n {
