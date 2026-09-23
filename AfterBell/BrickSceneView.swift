@@ -352,7 +352,7 @@ struct BrickSceneView: NSViewRepresentable {
             guard let raw = rep.bitmapData else { return }
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
             let src = color.usingColorSpace(.sRGB) ?? color.usingColorSpace(.deviceRGB) ?? color
-            if !src.getRed(&r, green: &g, blue: &b, alpha: &a) { return }
+            src.getRed(&r, green: &g, blue: &b, alpha: &a)
             let ir = UInt8(max(0, min(255, (1 - r) * 255)))
             let ig = UInt8(max(0, min(255, (1 - g) * 255)))
             let ib = UInt8(max(0, min(255, (1 - b) * 255)))
@@ -419,12 +419,10 @@ struct BrickSceneView: NSViewRepresentable {
                 }
                 return true
             }
-            let rep = NSBitmapImageRep(cgImage: raster(drawn))!
+            let rep = NSBitmapImageRep(cgImage: raster(drawn))
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
             let src = color.usingColorSpace(.sRGB) ?? color.usingColorSpace(.deviceRGB) ?? color
-            if !src.getRed(&r, green: &g, blue: &b, alpha: &a) {
-                r = 1; g = 1; b = 1
-            }
+            src.getRed(&r, green: &g, blue: &b, alpha: &a)
             let ink = NSColor(srgbRed: 1 - r, green: 1 - g, blue: 1 - b, alpha: 1)
             let clear = NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0)
             for y in 0..<rep.pixelsHigh {
