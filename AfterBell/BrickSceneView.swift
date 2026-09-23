@@ -117,19 +117,24 @@ struct BrickSceneView: NSViewRepresentable {
             cam.look(at: SCNVector3(0, 0.06, 0))
             scene.rootNode.addChildNode(cam)
 
-            func light(_ type: SCNLight.LightType, intensity: CGFloat, color: NSColor, at: SCNVector3) {
+            scene.lightingEnvironment.contents = Self.studioIBL()
+            scene.lightingEnvironment.intensity = 1.15
+
+            func light(_ type: SCNLight.LightType, intensity: CGFloat, color: NSColor, at: SCNVector3, look: Bool, scale: CGFloat) {
                 let node = SCNNode()
                 node.light = SCNLight()
                 node.light?.type = type
                 node.light?.intensity = intensity
                 node.light?.color = color
                 node.position = at
-                if type == .directional { node.look(at: SCNVector3(0, 0.1, 0)) }
+                node.scale = SCNVector3(scale, scale * 0.55, 1)
+                if look { node.look(at: SCNVector3(0, 0.25, 0)) }
                 scene.rootNode.addChildNode(node)
             }
-            light(.ambient, intensity: 90, color: NSColor(calibratedWhite: 0.5, alpha: 1), at: .init(0, 0, 0))
-            light(.directional, intensity: 180, color: NSColor(calibratedRed: 1, green: 0.98, blue: 0.94, alpha: 1), at: .init(1.6, 2.8, 2.2))
-            light(.omni, intensity: 50, color: NSColor(calibratedRed: 0.75, green: 0.9, blue: 1, alpha: 1), at: .init(-1.4, 0.3, 1.8))
+            light(.ambient, intensity: 28, color: NSColor(calibratedWhite: 0.42, alpha: 1), at: .init(0, 0, 0), look: false, scale: 1)
+            light(.area, intensity: 420, color: NSColor(calibratedWhite: 0.96, alpha: 1), at: .init(0.05, 2.35, 1.15), look: true, scale: 3.4)
+            light(.directional, intensity: 36, color: NSColor(calibratedWhite: 0.72, alpha: 1), at: .init(-0.2, 0.35, 3.2), look: true, scale: 1)
+            light(.directional, intensity: 18, color: NSColor(calibratedWhite: 0.55, alpha: 1), at: .init(1.8, 0.6, -1.2), look: true, scale: 1)
 
             mesh = JellyMesh(half: compact ? 0.52 : 0.64, radius: compact ? 0.24 : 0.30, segs: compact ? 14 : 20)
             bodyNode = SCNNode()
@@ -144,7 +149,7 @@ struct BrickSceneView: NSViewRepresentable {
             let shadow = SCNPlane(width: 1.7, height: 1.45)
             let sm = SCNMaterial()
             sm.diffuse.contents = NSColor.black
-            sm.transparency = 0.32
+            sm.transparency = 0.16
             sm.lightingModel = .constant
             sm.writesToDepthBuffer = false
             shadow.materials = [sm]
@@ -263,20 +268,38 @@ struct BrickSceneView: NSViewRepresentable {
             mat.diffuse.contents = color
             mat.ambient.contents = color
             mat.locksAmbientWithDiffuse = true
-            mat.roughness.contents = 0.12
+            mat.roughness.contents = 0.46
             mat.metalness.contents = 0
-            mat.specular.contents = NSColor(calibratedWhite: 0.8, alpha: 1)
-            mat.clearCoat.contents = 0.45
-            mat.clearCoatRoughness.contents = 0.06
-            mat.fresnelExponent = 0.65
+            mat.specular.contents = NSColor(calibratedWhite: 0.34, alpha: 1)
+            mat.clearCoat.contents = 0.06
+            mat.clearCoatRoughness.contents = 0.55
+            mat.fresnelExponent = 1.55
             mat.transparency = transparency
             mat.transparencyMode = .dualLayer
             mat.blendMode = .alpha
             mat.isDoubleSided = true
             mat.writesToDepthBuffer = false
             mat.readsFromDepthBuffer = true
-            mat.emission.contents = color.withAlphaComponent(0.04)
+            mat.emission.contents = color.withAlphaComponent(0.015)
             return mat
+        }
+
+        static func studioIBL() -> NSImage {
+            let size = NSSize(width: 128, height: 64)
+            return NSImage(size: size, flipped: false) { rect in
+                NSColor(calibratedWhite: 0.08, alpha: 1).setFill()
+                rect.fill()
+                let top = NSRect(x: 0, y: rect.height * 0.55, width: rect.width, height: rect.height * 0.45)
+                NSGradient(colors: [
+                    NSColor(calibratedWhite: 0.22, alpha: 1),
+                    NSColor(calibratedWhite: 0.92, alpha: 1),
+                    NSColor(calibratedWhite: 0.28, alpha: 1),
+                ])?.draw(in: top, angle: 0)
+                let glow = NSRect(x: rect.width * 0.28, y: rect.height * 0.62, width: rect.width * 0.44, height: rect.height * 0.32)
+                NSColor(calibratedWhite: 1, alpha: 0.85).setFill()
+                NSBezierPath(ovalIn: glow).fill()
+                return true
+            }
         }
 
         static func richer(_ color: NSColor) -> NSColor {
