@@ -263,16 +263,21 @@ struct BrickSceneView: NSViewRepresentable {
         }
 
         func placeLabel() {
-            var best = Float(0.72)
+            var best = Float(0.78)
             var bestD = Float(9)
-            for p in mesh.pos {
+            for p in mesh.pos where p.z > 0.2 {
                 let d = p.x * p.x + (p.y - 0.02) * (p.y - 0.02)
                 if d < bestD {
                     bestD = d
                     best = p.z
                 }
             }
-            labelNode.position = SCNVector3(0, 0.02, best + 0.05)
+            labelNode.position = SCNVector3(0, 0.06, best + 0.2)
+            labelNode.look(
+                at: SCNVector3(-0.42, 0.72, 3.25),
+                up: SCNVector3(0, 1, 0),
+                localFront: SCNVector3(0, 0, 1)
+            )
         }
 
         func wake() {
@@ -425,6 +430,8 @@ struct BrickSceneView: NSViewRepresentable {
             mat.lightingModel = .constant
             mat.diffuse.contents = color
             mat.isDoubleSided = true
+            mat.readsFromDepthBuffer = false
+            mat.writesToDepthBuffer = false
             geo.materials = [mat]
             let node = SCNNode(geometry: geo)
             let (mn, mx) = node.boundingBox
