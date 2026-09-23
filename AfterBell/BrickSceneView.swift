@@ -94,7 +94,6 @@ struct BrickSceneView: NSViewRepresentable {
         weak var view: SCNView?
         var bodyNode = SCNNode()
         var coreNode = SCNNode()
-        var labelNode = SCNNode()
         var mesh = JellyMesh(half: 0.64, radius: 0.30, segs: 18)
         var faceMat = SCNMaterial()
         var shellMat = SCNMaterial()
@@ -158,12 +157,6 @@ struct BrickSceneView: NSViewRepresentable {
             coreNode.renderingOrder = 10
             scene.rootNode.addChildNode(coreNode)
             scene.rootNode.addChildNode(bodyNode)
-            labelNode = SCNNode()
-            labelNode.name = "label"
-            labelNode.renderingOrder = 200
-            labelNode.categoryBitMask = 1
-            labelNode.position = SCNVector3(0, 0.02, 0.78)
-            scene.rootNode.addChildNode(labelNode)
 
             let shadow = SCNPlane(width: 1.7, height: 1.45)
             let sm = SCNMaterial()
@@ -198,27 +191,12 @@ struct BrickSceneView: NSViewRepresentable {
             face.locksAmbientWithDiffuse = false
             face.transparency = 0
             face.transparencyMode = .default
-            face.isDoubleSided = false
+            face.isDoubleSided = true
             face.writesToDepthBuffer = true
             face.shaderModifiers = nil
             faceMat = face
             coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.40)
-            let (cr, cg, cb) = Self.complement(from: fillHex)
-            let ink = NSColor(srgbRed: cr, green: cg, blue: cb, alpha: 1)
-            labelNode.childNodes.forEach { $0.removeFromParentNode() }
-            let codeNode = Self.textNode(code, width: compact ? 0.62 : 0.78, color: ink)
-            codeNode.position.y += compact ? 0 : 0.16
-            labelNode.addChildNode(codeNode)
-            if !compact {
-                let nameNode = Self.textNode(name, width: 0.7, color: ink)
-                nameNode.position.y -= 0.16
-                labelNode.addChildNode(nameNode)
-                let countNode = Self.textNode(count, width: 0.48, color: ink)
-                countNode.position.y -= 0.34
-                labelNode.addChildNode(countNode)
-            }
             upload(forceMaterials: true)
-            placeLabel()
         }
 
         func aim(at point: CGPoint) {
@@ -253,29 +231,7 @@ struct BrickSceneView: NSViewRepresentable {
             clickPoint = point
             clickAmp = 1
             clickAge = 0
-            let n = mesh.pos.count
-            let spot = SIMD2<Float>(point.x, point.y)
-            for i in 0..<n {
-                let d = simd_length(SIMD2(mesh.rest[i].x, mesh.rest[i].y) - spot)
-                let w = exp(-d * d * 8)
-                let toward = simd_normalize(SIMD3<Float>(-0.1, 0.55, 3.1) - mesh.rest[i])
-                mesh.vel[i] += toward * w * 3.2
-            }
             wake()
-        }
-
-        func placeLabel() {
-            var best = Float(0.78)
-            var bestD = Float(9)
-            for p in mesh.pos where p.z > 0.2 {
-                let d = p.x * p.x + (p.y - 0.02) * (p.y - 0.02)
-                if d < bestD {
-                    bestD = d
-                    best = p.z
-                }
-            }
-            labelNode.eulerAngles = SCNVector3(0, 0, 0)
-            labelNode.position = SCNVector3(0, 0, best + 0.16)
         }
 
         func wake() {
@@ -316,7 +272,6 @@ struct BrickSceneView: NSViewRepresentable {
                 mesh.step(h: h, env: env, hoverTime: hoverTime, rope: rope, click: clickPoint, clickAmp: clickAmp, clickAge: clickAge)
             }
             mesh.recomputeNormals()
-            placeLabel()
             upload(forceMaterials: false)
         }
 
@@ -394,29 +349,32 @@ struct BrickSceneView: NSViewRepresentable {
             let base = raster(liquidImage(color: color, letters: false, code: "", name: "", count: "", compact: compact))
             let (cr, cg, cb) = complement(from: hex)
             let ink = NSColor(srgbRed: cr, green: cg, blue: cb, alpha: 1)
+            let outline = NSColor(srgbRed: 0.05, green: 0.05, blue: 0.05, alpha: 1)
+            guard let ctx = NSGraphicsContext(bitmapImageRep: rep) else { return base }
             NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+            NSGraphicsContext.current = ctx
             NSImage(cgImage: base, size: NSSize(width: w, height: h)).draw(in: NSRect(x: 0, y: 0, width: w, height: h))
             let paragraph = NSMutableParagraphStyle()
             paragraph.alignment = .center
-            let font = NSFont(name: "MarkerFelt-Wide", size: compact ? 460 : 400)
-                ?? NSFont.systemFont(ofSize: compact ? 460 : 400, weight: .bold)
-            (code as NSString).draw(
-                in: NSRect(x: 40, y: compact ? 280 : 200, width: 944, height: 460),
-                withAttributes: [.font: font, .foregroundColor: ink, .paragraphStyle: paragraph, .kern: 6]
-            )
-            if !compact {
-                (name as NSString).draw(
-                    in: NSRect(x: 48, y: 640, width: 928, height: 120),
-                    withAttributes: [.font: NSFont.systemFont(ofSize: 62, weight: .semibold), .foregroundColor: ink, .paragraphStyle: paragraph]
-                )
-                (count as NSString).draw(
-                    in: NSRect(x: 48, y: 770, width: 928, height: 100),
-                    withAttributes: [.font: NSFont.systemFont(ofSize: 46, weight: .medium), .foregroundColor: ink, .paragraphStyle: paragraph]
+            let font = NSFont(name: "MarkerFelt-Wide", size: compact ? 500 : 430)
+                ?? NSFont.systemFont(ofSize: compact ? 500 : 430, weight: .bold)
+            func drawLine(_ text: String, rect: NSRect, font: NSFont) {
+                let shadow = NSShadow()
+                shadow.shadowColor = outline
+                shadow.shadowBlurRadius = 10
+                shadow.shadowOffset = .zero
+                (text as NSString).draw(
+                    in: rect,
+                    withAttributes: [.font: font, .foregroundColor: ink, .paragraphStyle: paragraph, .kern: 4, .shadow: shadow]
                 )
             }
+            drawLine(code, rect: NSRect(x: 40, y: compact ? 250 : 180, width: 944, height: 500), font: font)
+            if !compact {
+                drawLine(name, rect: NSRect(x: 48, y: 640, width: 928, height: 120), font: NSFont.systemFont(ofSize: 64, weight: .bold))
+                drawLine(count, rect: NSRect(x: 48, y: 760, width: 928, height: 100), font: NSFont.systemFont(ofSize: 48, weight: .semibold))
+            }
             NSGraphicsContext.restoreGraphicsState()
-            return rep.cgImage!
+            return rep.cgImage ?? base
         }
 
         static func textNode(_ string: String, width: CGFloat, color: NSColor) -> SCNNode {
