@@ -94,6 +94,7 @@ struct BrickSceneView: NSViewRepresentable {
         weak var view: SCNView?
         var bodyNode = SCNNode()
         var coreNode = SCNNode()
+        var labelNode = SCNNode()
         var mesh = JellyMesh(half: 0.64, radius: 0.30, segs: 18)
         var faceMat = SCNMaterial()
         var shellMat = SCNMaterial()
@@ -157,6 +158,11 @@ struct BrickSceneView: NSViewRepresentable {
             coreNode.renderingOrder = 10
             scene.rootNode.addChildNode(coreNode)
             scene.rootNode.addChildNode(bodyNode)
+            let plate = SCNPlane(width: 1.12, height: 1.12)
+            labelNode = SCNNode(geometry: plate)
+            labelNode.position = SCNVector3(0, 0.02, 1.02)
+            labelNode.renderingOrder = 300
+            scene.rootNode.addChildNode(labelNode)
 
             let shadow = SCNPlane(width: 1.7, height: 1.45)
             let sm = SCNMaterial()
@@ -196,6 +202,18 @@ struct BrickSceneView: NSViewRepresentable {
             face.shaderModifiers = nil
             faceMat = face
             coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.40)
+            let card = SCNMaterial()
+            card.lightingModel = .constant
+            card.diffuse.contents = Self.raster(Self.labelCard(hex: fillHex, code: code, name: name, count: count, compact: compact))
+            card.multiply.contents = NSColor.white
+            card.ambient.contents = NSColor.black
+            card.emission.contents = NSColor.black
+            card.locksAmbientWithDiffuse = false
+            card.isDoubleSided = true
+            card.readsFromDepthBuffer = false
+            card.writesToDepthBuffer = false
+            card.transparency = 0
+            labelNode.geometry?.materials = [card]
             upload(forceMaterials: true)
         }
 
@@ -402,6 +420,44 @@ struct BrickSceneView: NSViewRepresentable {
                 0
             )
             return node
+        }
+
+        static func labelCard(hex: String, code: String, name: String, count: String, compact: Bool) -> NSImage {
+            let size = NSSize(width: 1024, height: 1024)
+            return NSImage(size: size, flipped: true) { rect in
+                var h = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+                if h.hasPrefix("#") { h.removeFirst() }
+                let value = UInt32(h, radix: 16) ?? 0
+                let r = CGFloat((value >> 16) & 0xFF) / 255
+                let g = CGFloat((value >> 8) & 0xFF) / 255
+                let b = CGFloat(value & 0xFF) / 255
+                NSColor(srgbRed: r, green: g, blue: b, alpha: 1).setFill()
+                rect.fill()
+                let ink = NSColor(srgbRed: 1 - r, green: 1 - g, blue: 1 - b, alpha: 1)
+                let paragraph = NSMutableParagraphStyle()
+                paragraph.alignment = .center
+                let shadow = NSShadow()
+                shadow.shadowColor = NSColor.black
+                shadow.shadowBlurRadius = 8
+                shadow.shadowOffset = .zero
+                let font = NSFont(name: "MarkerFelt-Wide", size: compact ? 500 : 420)
+                    ?? NSFont.systemFont(ofSize: compact ? 500 : 420, weight: .bold)
+                (code as NSString).draw(
+                    in: NSRect(x: 36, y: compact ? 260 : 170, width: 952, height: 520),
+                    withAttributes: [.font: font, .foregroundColor: ink, .paragraphStyle: paragraph, .shadow: shadow]
+                )
+                if !compact {
+                    (name as NSString).draw(
+                        in: NSRect(x: 40, y: 660, width: 944, height: 110),
+                        withAttributes: [.font: NSFont.systemFont(ofSize: 62, weight: .bold), .foregroundColor: ink, .paragraphStyle: paragraph]
+                    )
+                    (count as NSString).draw(
+                        in: NSRect(x: 40, y: 780, width: 944, height: 90),
+                        withAttributes: [.font: NSFont.systemFont(ofSize: 46, weight: .semibold), .foregroundColor: ink, .paragraphStyle: paragraph]
+                    )
+                }
+                return true
+            }
         }
 
         static func complement(from hex: String) -> (CGFloat, CGFloat, CGFloat) {
