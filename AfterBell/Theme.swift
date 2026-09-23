@@ -6,6 +6,8 @@ enum AfterBellTheme {
     static let raised = Color(red: 28 / 255, green: 28 / 255, blue: 32 / 255)
     static let fg = Color(red: 242 / 255, green: 241 / 255, blue: 238 / 255)
     static let muted = Color(red: 142 / 255, green: 141 / 255, blue: 136 / 255)
+    static let onGlass = Color.white
+    static let onGlassSoft = Color.white.opacity(0.88)
     static let accent = Color(red: 200 / 255, green: 204 / 255, blue: 212 / 255)
     static let accentFg = Color(red: 12 / 255, green: 12 / 255, blue: 13 / 255)
     static let danger = Color(red: 201 / 255, green: 137 / 255, blue: 128 / 255)
