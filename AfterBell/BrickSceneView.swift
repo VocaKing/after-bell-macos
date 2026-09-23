@@ -36,6 +36,7 @@ struct BrickSceneView: NSViewRepresentable {
     var name: String
     var count: String
     var hovered: Bool
+    var pointer: CGPoint? = nil
     var selected: Bool
     var compact: Bool = false
 
@@ -68,6 +69,7 @@ struct BrickSceneView: NSViewRepresentable {
             color: color, code: code, name: name, count: count, fillHex: fillHex,
             hovered: hovered, selected: selected, compact: compact
         )
+        if let pointer { context.coordinator.aim(at: pointer) }
         return view
     }
 
@@ -79,6 +81,7 @@ struct BrickSceneView: NSViewRepresentable {
             color: color, code: code, name: name, count: count, fillHex: fillHex,
             hovered: hovered, selected: selected, compact: compact
         )
+        if let pointer { context.coordinator.aim(at: pointer) }
     }
 
     final class Coordinator: NSObject, SCNSceneRendererDelegate {
@@ -187,6 +190,35 @@ struct BrickSceneView: NSViewRepresentable {
             faceMat = face
             coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.40)
             upload(forceMaterials: true)
+        }
+
+        func aim(at point: CGPoint) {
+            guard let view else { return }
+            let width = max(view.bounds.width, 1)
+            let height = max(view.bounds.height, 1)
+            let nx = Float((point.x / width) * 2 - 1)
+            let ny = Float((1 - point.y / height) * 2 - 1)
+            ropeTarget = SIMD3(nx * 0.5, ny * 0.42, 0.55)
+            let appKit = NSPoint(x: point.x, y: height - point.y)
+            let hits = view.hitTest(appKit, options: [
+                SCNHitTestOption.searchMode: SCNHitTestSearchMode.closest.rawValue,
+                SCNHitTestOption.boundingBoxOnly: false,
+            ])
+            if let hit = hits.first(where: { node in
+                var n: SCNNode? = node.node
+                while let cur = n {
+                    if cur.name == "body" || cur.name == "core" { return true }
+                    n = cur.parent
+                }
+                return false
+            }) {
+                let local = hit.node.name == "body"
+                    ? hit.localCoordinates
+                    : hit.node.convertPosition(hit.localCoordinates, to: hit.node.parent)
+                ropeTarget = SIMD3(Float(local.x), Float(local.y), 0.55)
+            }
+            trackingHover = true
+            wake()
         }
 
         func beginRipple(_ point: SIMD3<Float>) {
@@ -362,23 +394,34 @@ struct BrickSceneView: NSViewRepresentable {
             NSImage(cgImage: base, size: NSSize(width: w, height: h)).draw(in: NSRect(x: 0, y: 0, width: w, height: h))
             let paragraph = NSMutableParagraphStyle()
             paragraph.alignment = .center
+            let black = NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
             let font = NSFont(name: "MarkerFelt-Wide", size: compact ? 460 : 400)
                 ?? NSFont.systemFont(ofSize: compact ? 460 : 400, weight: .bold)
             (code as NSString).draw(
                 in: NSRect(x: 40, y: compact ? 280 : 200, width: 944, height: 460),
-                withAttributes: [.font: font, .foregroundColor: ink, .paragraphStyle: paragraph, .kern: 6]
+                withAttributes: [.font: font, .foregroundColor: black, .paragraphStyle: paragraph, .kern: 6]
             )
             if !compact {
                 (name as NSString).draw(
                     in: NSRect(x: 48, y: 640, width: 928, height: 120),
-                    withAttributes: [.font: NSFont.systemFont(ofSize: 62, weight: .semibold), .foregroundColor: ink, .paragraphStyle: paragraph]
+                    withAttributes: [.font: NSFont.systemFont(ofSize: 62, weight: .semibold), .foregroundColor: black, .paragraphStyle: paragraph]
                 )
                 (count as NSString).draw(
                     in: NSRect(x: 48, y: 770, width: 928, height: 100),
-                    withAttributes: [.font: NSFont.systemFont(ofSize: 46, weight: .medium), .foregroundColor: ink, .paragraphStyle: paragraph]
+                    withAttributes: [.font: NSFont.systemFont(ofSize: 46, weight: .medium), .foregroundColor: black, .paragraphStyle: paragraph]
                 )
             }
             NSGraphicsContext.restoreGraphicsState()
+            for y in 0..<h {
+                for x in 0..<w {
+                    guard let pix = rep.colorAt(x: x, y: y) else { continue }
+                    var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                    pix.getRed(&r, green: &g, blue: &b, alpha: &a)
+                    if r + g + b < 0.45 {
+                        rep.setColor(ink, atX: x, y: y)
+                    }
+                }
+            }
             return rep.cgImage!
         }
 
