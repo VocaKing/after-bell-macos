@@ -377,7 +377,8 @@ struct JellyMesh {
             return (c + n * r, n)
         }
 
-        func emit(_ point: (Float, Float) -> SIMD3<Float>, into bucket: inout [UInt32]) {
+        func emit(_ point: (Float, Float) -> SIMD3<Float>) -> [UInt32] {
+            var bucket: [UInt32] = []
             let start = rest.count
             for j in 0...segs {
                 let v = Float(j) / Float(segs)
@@ -405,14 +406,17 @@ struct JellyMesh {
                     link(a, b); link(a, c); link(b, d); link(c, d)
                 }
             }
+            return bucket
         }
 
-        emit({ u, v in SIMD3(u * half, v * half, half) }, into: &front)
-        emit({ u, v in SIMD3(half, v * half, -u * half) }, into: &shell)
-        emit({ u, v in SIMD3(-u * half, v * half, -half) }, into: &shell)
-        emit({ u, v in SIMD3(-half, v * half, u * half) }, into: &shell)
-        emit({ u, v in SIMD3(u * half, half, -v * half) }, into: &shell)
-        emit({ u, v in SIMD3(u * half, -half, v * half) }, into: &shell)
+        let faceIndices = emit { u, v in SIMD3(u * half, v * half, half) }
+        let right = emit { u, v in SIMD3(half, v * half, -u * half) }
+        let back = emit { u, v in SIMD3(-u * half, v * half, -half) }
+        let left = emit { u, v in SIMD3(-half, v * half, u * half) }
+        let top = emit { u, v in SIMD3(u * half, half, -v * half) }
+        let bottom = emit { u, v in SIMD3(u * half, -half, v * half) }
+        front = faceIndices
+        shell = right + back + left + top + bottom
         weldEdges()
         recomputeNormals()
     }
