@@ -160,7 +160,7 @@ struct BrickSceneView: NSViewRepresentable {
             scene.rootNode.addChildNode(bodyNode)
             labelNode = SCNNode()
             labelNode.name = "label"
-            labelNode.renderingOrder = 80
+            labelNode.renderingOrder = 200
             labelNode.categoryBitMask = 0
             labelNode.position = SCNVector3(0, 0.02, 0.78)
             scene.rootNode.addChildNode(labelNode)
@@ -207,14 +207,14 @@ struct BrickSceneView: NSViewRepresentable {
             let ink = NSColor(srgbRed: cr, green: cg, blue: cb, alpha: 1)
             labelNode.childNodes.forEach { $0.removeFromParentNode() }
             let codeNode = Self.textNode(code, width: compact ? 0.62 : 0.78, color: ink)
-            codeNode.position.y += compact ? 0 : 0.08
+            codeNode.position.y += compact ? 0 : 0.16
             labelNode.addChildNode(codeNode)
             if !compact {
                 let nameNode = Self.textNode(name, width: 0.7, color: ink)
-                nameNode.position.y -= 0.28
+                nameNode.position.y -= 0.16
                 labelNode.addChildNode(nameNode)
                 let countNode = Self.textNode(count, width: 0.48, color: ink)
-                countNode.position.y -= 0.46
+                countNode.position.y -= 0.34
                 labelNode.addChildNode(countNode)
             }
             upload(forceMaterials: true)
@@ -257,7 +257,7 @@ struct BrickSceneView: NSViewRepresentable {
             for i in 0..<n {
                 let d = simd_length(mesh.rest[i] - point)
                 let w = exp(-d * d * 14)
-                mesh.vel[i] += mesh.normal[i] * w * 4.5
+                mesh.vel[i] += mesh.normal[i] * w * 8
             }
             wake()
         }
@@ -272,12 +272,8 @@ struct BrickSceneView: NSViewRepresentable {
                     best = p.z
                 }
             }
-            labelNode.position = SCNVector3(0, 0.06, best + 0.2)
-            labelNode.look(
-                at: SCNVector3(-0.42, 0.72, 3.25),
-                up: SCNVector3(0, 1, 0),
-                localFront: SCNVector3(0, 0, 1)
-            )
+            labelNode.eulerAngles = SCNVector3(0, 0, 0)
+            labelNode.position = SCNVector3(0, 0, best + 0.16)
         }
 
         func wake() {
@@ -290,16 +286,16 @@ struct BrickSceneView: NSViewRepresentable {
             lastTime = time
             let hovering = trackingHover || swiftHover
             if hovering != wasHovering {
-                if hovering { hoverTime = 0 }
+                if hovering { hoverTime = 0.12 }
                 wasHovering = hovering
             }
             hoverTime += dt
-            let follow = min(1, dt * 14)
+            let follow = min(1, dt * 36)
             rope += (ropeTarget - rope) * follow
             let target: Float = hovering ? 1 : 0
-            envVel += ((target - env) * 64 - envVel * 9) * dt
+            envVel += ((target - env) * 180 - envVel * 12) * dt
             env += envVel * dt
-            clickAmp *= exp(-1.8 * dt)
+            clickAmp *= exp(-2.6 * dt)
             clickAge += dt
 
             let moving = abs(env) > 0.01 || abs(envVel) > 0.01 || clickAmp > 0.02 || mesh.energy() > 0.0004
@@ -313,8 +309,8 @@ struct BrickSceneView: NSViewRepresentable {
                 return
             }
 
-            let h = dt / 3
-            for _ in 0..<3 {
+            let h = dt / 4
+            for _ in 0..<4 {
                 mesh.step(h: h, env: env, hoverTime: hoverTime, rope: rope, click: clickPoint, clickAmp: clickAmp, clickAge: clickAge)
             }
             mesh.recomputeNormals()
@@ -764,21 +760,21 @@ struct JellyMesh {
             let dx = r.x - rope.x
             let dy = r.y - rope.y
             let ropeDist = simd_length(SIMD2(dx, dy))
-            let lagged = max(0, hoverTime - ropeDist * 0.38)
-            let arrive = 1 - exp(-lagged * 14)
-            let sway = sin(lagged * 13) * exp(-lagged * 1.8)
-            let center = exp(-(dx * dx + dy * dy) * 4.2)
-            let pull = env * arrive * 0.42 * center + env * sway * 0.025 * center
+            let lagged = max(0, hoverTime - ropeDist * 0.1)
+            let arrive = 1 - exp(-lagged * 26)
+            let sway = sin(lagged * 16) * exp(-lagged * 2.2)
+            let center = exp(-(dx * dx + dy * dy) * 3.4)
+            let pull = env * arrive * 0.82 * center + env * sway * 0.05 * center
             let cam = SIMD3<Float>(-0.1, 0.55, 3.1)
             let toward = simd_normalize(cam - r)
             var t = r + toward * pull
             let cd = simd_length(r - click)
-            let ripple = sin(cd * 16 - clickAge * 17) * exp(-cd * 2.5) * exp(-clickAge * 1.55)
-            t += normal[i] * ripple * clickAmp * 0.38
+            let ripple = sin(cd * 18 - clickAge * 26) * exp(-cd * 2.2) * exp(-clickAge * 2.1)
+            t += normal[i] * ripple * clickAmp * 0.62
             target[i] = t
         }
         for i in 0..<n {
-            var f = (target[i] - pos[i]) * 55 - vel[i] * 7.2
+            var f = (target[i] - pos[i]) * 90 - vel[i] * 8
             if !neighbors[i].isEmpty {
                 var avg = SIMD3<Float>(repeating: 0)
                 for j in neighbors[i] { avg += pos[j] - rest[j] }
@@ -789,7 +785,8 @@ struct JellyMesh {
             pos[i] += vel[i] * h
             let delta = pos[i] - rest[i]
             let mag = simd_length(delta)
-            if mag > 0.48 {
+            if mag > 0.72 {
+                pos[i] = rest[i] + delta / mag * 0.72
                 pos[i] = rest[i] + delta / mag * 0.48
                 vel[i] *= 0.45
             }
