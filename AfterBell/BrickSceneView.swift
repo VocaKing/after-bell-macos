@@ -787,7 +787,6 @@ struct JellyMesh {
             let mag = simd_length(delta)
             if mag > 0.72 {
                 pos[i] = rest[i] + delta / mag * 0.72
-                pos[i] = rest[i] + delta / mag * 0.48
                 vel[i] *= 0.45
             }
         }
