@@ -167,9 +167,9 @@ struct BrickSceneView: NSViewRepresentable {
             let key = "\(code)|\(name)|\(count)|\(compact)|\(rgb.redComponent)|\(rgb.greenComponent)|\(rgb.blueComponent)"
             guard key != lastKey else { return }
             lastKey = key
-            shellMat = Self.gelatin(rgb, transparency: 0.52)
+            shellMat = Self.gelatin(rgb, transparency: 0.64)
             shellMat.diffuse.contents = Self.raster(Self.liquidImage(color: rgb, letters: false, code: "", name: "", count: "", compact: compact))
-            faceMat = Self.gelatin(rgb, transparency: 0.06)
+            faceMat = Self.gelatin(rgb, transparency: 0.16)
             faceMat.lightingModel = .constant
             faceMat.emission.contents = NSColor.black
             faceMat.locksAmbientWithDiffuse = false
@@ -178,7 +178,7 @@ struct BrickSceneView: NSViewRepresentable {
             faceMat.diffuse.magnificationFilter = .linear
             faceMat.diffuse.minificationFilter = .linear
             faceMat.diffuse.mipFilter = .linear
-            coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.28)
+            coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.40)
             upload(forceMaterials: true)
         }
 
@@ -314,9 +314,11 @@ struct BrickSceneView: NSViewRepresentable {
         }
 
         static func complementaryInk(_ color: NSColor) -> NSColor {
-            let c = color.usingColorSpace(.deviceRGB) ?? color
+            let c = color.usingColorSpace(.sRGB)
+                ?? color.usingColorSpace(.deviceRGB)
+                ?? color
             return NSColor(
-                calibratedRed: 1 - c.redComponent,
+                srgbRed: 1 - c.redComponent,
                 green: 1 - c.greenComponent,
                 blue: 1 - c.blueComponent,
                 alpha: 1
