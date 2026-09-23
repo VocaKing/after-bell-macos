@@ -31,6 +31,7 @@ final class JellySCNView: SCNView {
 
 struct BrickSceneView: NSViewRepresentable {
     var color: NSColor
+    var fillHex: String
     var code: String
     var name: String
     var count: String
@@ -57,14 +58,14 @@ struct BrickSceneView: NSViewRepresentable {
         view.preferredFramesPerSecond = 60
         view.addTrackingArea(NSTrackingArea(
             rect: .zero,
-            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            options: [.mouseEnteredAndExited, .mouseMoved, .activeInKeyWindow, .inVisibleRect],
             owner: context.coordinator,
             userInfo: nil
         ))
         context.coordinator.view = view
         context.coordinator.build(compact: compact)
         context.coordinator.apply(
-            color: color, code: code, name: name, count: count,
+            color: color, code: code, name: name, count: count, fillHex: fillHex,
             hovered: hovered, selected: selected, compact: compact
         )
         return view
@@ -75,7 +76,7 @@ struct BrickSceneView: NSViewRepresentable {
         view.delegate = context.coordinator
         context.coordinator.view = view
         context.coordinator.apply(
-            color: color, code: code, name: name, count: count,
+            color: color, code: code, name: name, count: count, fillHex: fillHex,
             hovered: hovered, selected: selected, compact: compact
         )
     }
@@ -100,7 +101,8 @@ struct BrickSceneView: NSViewRepresentable {
         var clickAge: Float = 0
         var clickPoint = SIMD3<Float>(0, 0.2, 0.55)
         var lastTime: TimeInterval = 0
-        let rope = SIMD3<Float>(0, 0, 0.62)
+        var rope = SIMD3<Float>(0, 0, 0.55)
+        var ropeTarget = SIMD3<Float>(0, 0, 0.55)
 
         func build(compact: Bool) {
             guard let view, let scene = view.scene else { return }
@@ -160,23 +162,29 @@ struct BrickSceneView: NSViewRepresentable {
             upload(forceMaterials: false)
         }
 
-        func apply(color: NSColor, code: String, name: String, count: String, hovered: Bool, selected: Bool, compact: Bool) {
+        func apply(color: NSColor, code: String, name: String, count: String, fillHex: String, hovered: Bool, selected: Bool, compact: Bool) {
             swiftHover = hovered
             if hovered { wake() }
             let rgb = color.usingColorSpace(.deviceRGB) ?? color
-            let key = "\(code)|\(name)|\(count)|\(compact)|\(rgb.redComponent)|\(rgb.greenComponent)|\(rgb.blueComponent)"
+            let key = "\(code)|\(name)|\(count)|\(compact)|\(fillHex)"
             guard key != lastKey else { return }
             lastKey = key
             shellMat = Self.gelatin(rgb, transparency: 0.64)
             shellMat.diffuse.contents = Self.raster(Self.liquidImage(color: rgb, letters: false, code: "", name: "", count: "", compact: compact))
-            faceMat = Self.gelatin(rgb, transparency: 0.16)
-            faceMat.lightingModel = .constant
-            faceMat.locksAmbientWithDiffuse = false
-            faceMat.multiply.contents = NSColor.white
-            faceMat.ambient.contents = NSColor.black
-            faceMat.emission.contents = NSColor.black
-            faceMat.shaderModifiers = nil
-            faceMat.diffuse.contents = Self.faceImage(color: rgb, code: code, name: name, count: count, compact: compact)
+            let image = Self.faceImage(color: rgb, hex: fillHex, code: code, name: name, count: count, compact: compact)
+            let face = SCNMaterial()
+            face.lightingModel = .constant
+            face.diffuse.contents = image
+            face.multiply.contents = NSColor.white
+            face.ambient.contents = NSColor.black
+            face.emission.contents = NSColor.black
+            face.locksAmbientWithDiffuse = false
+            face.transparency = 0
+            face.transparencyMode = .default
+            face.isDoubleSided = false
+            face.writesToDepthBuffer = true
+            face.shaderModifiers = nil
+            faceMat = face
             coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.40)
             upload(forceMaterials: true)
         }
@@ -191,6 +199,30 @@ struct BrickSceneView: NSViewRepresentable {
                 let w = exp(-d * d * 14)
                 mesh.vel[i] += mesh.normal[i] * w * 3.2
             }
+            wake()
+        }
+
+        @objc func mouseMoved(with event: NSEvent) {
+            guard let view else { return }
+            let point = view.convert(event.locationInWindow, from: nil)
+            let hits = view.hitTest(point, options: [
+                SCNHitTestOption.searchMode: SCNHitTestSearchMode.closest.rawValue,
+                SCNHitTestOption.boundingBoxOnly: false,
+            ])
+            if let hit = hits.first(where: { node in
+                var n: SCNNode? = node.node
+                while let cur = n {
+                    if cur.name == "body" || cur.name == "core" { return true }
+                    n = cur.parent
+                }
+                return false
+            }) {
+                let local = hit.node.name == "body"
+                    ? hit.localCoordinates
+                    : hit.node.convertPosition(hit.localCoordinates, to: hit.node.parent)
+                ropeTarget = SIMD3(Float(local.x), Float(local.y), Float(local.z))
+            }
+            trackingHover = true
             wake()
         }
 
@@ -224,6 +256,8 @@ struct BrickSceneView: NSViewRepresentable {
                 wasHovering = hovering
             }
             hoverTime += dt
+            let follow = min(1, dt * 14)
+            rope += (ropeTarget - rope) * follow
             let target: Float = hovering ? 1 : 0
             envVel += ((target - env) * 64 - envVel * 9) * dt
             env += envVel * dt
@@ -312,7 +346,7 @@ struct BrickSceneView: NSViewRepresentable {
             return NSColor(calibratedHue: h, saturation: min(1, s + 0.12), brightness: max(0.22, b * 0.75), alpha: 1)
         }
 
-        static func faceImage(color: NSColor, code: String, name: String, count: String, compact: Bool) -> CGImage {
+        static func faceImage(color: NSColor, hex: String, code: String, name: String, count: String, compact: Bool) -> CGImage {
             let w = 1024
             let h = 1024
             let rep = NSBitmapImageRep(
@@ -321,59 +355,41 @@ struct BrickSceneView: NSViewRepresentable {
                 colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
             )!
             let base = raster(liquidImage(color: color, letters: false, code: "", name: "", count: "", compact: compact))
+            let (cr, cg, cb) = complement(from: hex)
+            let ink = NSColor(srgbRed: cr, green: cg, blue: cb, alpha: 1)
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
             NSImage(cgImage: base, size: NSSize(width: w, height: h)).draw(in: NSRect(x: 0, y: 0, width: w, height: h))
             let paragraph = NSMutableParagraphStyle()
             paragraph.alignment = .center
-            let black = NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
             let font = NSFont(name: "MarkerFelt-Wide", size: compact ? 460 : 400)
                 ?? NSFont.systemFont(ofSize: compact ? 460 : 400, weight: .bold)
             (code as NSString).draw(
                 in: NSRect(x: 40, y: compact ? 280 : 200, width: 944, height: 460),
-                withAttributes: [.font: font, .foregroundColor: black, .paragraphStyle: paragraph, .kern: 6]
+                withAttributes: [.font: font, .foregroundColor: ink, .paragraphStyle: paragraph, .kern: 6]
             )
             if !compact {
                 (name as NSString).draw(
                     in: NSRect(x: 48, y: 640, width: 928, height: 120),
-                    withAttributes: [.font: NSFont.systemFont(ofSize: 62, weight: .semibold), .foregroundColor: black, .paragraphStyle: paragraph]
+                    withAttributes: [.font: NSFont.systemFont(ofSize: 62, weight: .semibold), .foregroundColor: ink, .paragraphStyle: paragraph]
                 )
                 (count as NSString).draw(
                     in: NSRect(x: 48, y: 770, width: 928, height: 100),
-                    withAttributes: [.font: NSFont.systemFont(ofSize: 46, weight: .medium), .foregroundColor: black, .paragraphStyle: paragraph]
+                    withAttributes: [.font: NSFont.systemFont(ofSize: 46, weight: .medium), .foregroundColor: ink, .paragraphStyle: paragraph]
                 )
             }
             NSGraphicsContext.restoreGraphicsState()
-            stampComplement(rep, color: color)
             return rep.cgImage!
         }
 
-        static func stampComplement(_ rep: NSBitmapImageRep, color: NSColor) {
-            guard let raw = rep.bitmapData else { return }
-            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-            let src = color.usingColorSpace(.sRGB) ?? color.usingColorSpace(.deviceRGB) ?? color
-            src.getRed(&r, green: &g, blue: &b, alpha: &a)
-            let ir = UInt8(max(0, min(255, (1 - r) * 255)))
-            let ig = UInt8(max(0, min(255, (1 - g) * 255)))
-            let ib = UInt8(max(0, min(255, (1 - b) * 255)))
-            let br = Int(max(0, min(255, r * 255)))
-            let bg = Int(max(0, min(255, g * 255)))
-            let bb = Int(max(0, min(255, b * 255)))
-            let base = br + bg + bb
-            let bpp = max(rep.bitsPerPixel / 8, 4)
-            let row = rep.bytesPerRow
-            for y in 0..<rep.pixelsHigh {
-                for x in 0..<rep.pixelsWide {
-                    let i = y * row + x * bpp
-                    let sum = Int(raw[i]) + Int(raw[i + 1]) + Int(raw[i + 2])
-                    if sum + 100 < base {
-                        raw[i] = ir
-                        raw[i + 1] = ig
-                        raw[i + 2] = ib
-                        raw[i + 3] = 255
-                    }
-                }
-            }
+        static func complement(from hex: String) -> (CGFloat, CGFloat, CGFloat) {
+            var h = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+            if h.hasPrefix("#") { h.removeFirst() }
+            guard h.count == 6, let value = UInt32(h, radix: 16) else { return (0, 0, 0) }
+            let r = CGFloat((value >> 16) & 0xFF) / 255
+            let g = CGFloat((value >> 8) & 0xFF) / 255
+            let b = CGFloat(value & 0xFF) / 255
+            return (1 - r, 1 - g, 1 - b)
         }
 
         static func letterDecal(color: NSColor, code: String, name: String, count: String, compact: Bool) -> SCNMaterial {
@@ -679,11 +695,13 @@ struct JellyMesh {
         var target = rest
         for i in 0..<n {
             let r = rest[i]
-            let ropeDist = simd_length(r - rope)
+            let dx = r.x - rope.x
+            let dy = r.y - rope.y
+            let ropeDist = simd_length(SIMD2(dx, dy))
             let lagged = max(0, hoverTime - ropeDist * 0.38)
             let arrive = 1 - exp(-lagged * 14)
             let sway = sin(lagged * 13) * exp(-lagged * 1.8)
-            let center = exp(-simd_length_squared(SIMD2(r.x, r.y)) * 7.5)
+            let center = exp(-(dx * dx + dy * dy) * 8)
             var pull = env * arrive * (0.05 + 0.42 * center)
             pull += env * sway * 0.05 * (0.3 + 0.7 * center)
             var t = r
