@@ -167,14 +167,15 @@ struct BrickSceneView: NSViewRepresentable {
             let key = "\(code)|\(name)|\(count)|\(compact)|\(rgb.redComponent)|\(rgb.greenComponent)|\(rgb.blueComponent)"
             guard key != lastKey else { return }
             lastKey = key
-            shellMat = Self.gelatin(rgb, transparency: 0.58)
-            faceMat = Self.gelatin(rgb, transparency: 0.34)
-            let image = Self.raster(Self.paintFace(color: rgb, code: code, name: name, count: count, compact: compact))
+            shellMat = Self.gelatin(rgb, transparency: 0.30)
+            shellMat.diffuse.contents = Self.raster(Self.liquidImage(color: rgb, letters: false, code: "", name: "", count: "", compact: compact))
+            faceMat = Self.gelatin(rgb, transparency: 0.14)
+            let image = Self.raster(Self.liquidImage(color: rgb, letters: true, code: code, name: name, count: count, compact: compact))
             faceMat.diffuse.contents = image
             faceMat.diffuse.magnificationFilter = .linear
             faceMat.diffuse.minificationFilter = .linear
             faceMat.diffuse.mipFilter = .linear
-            coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.18)
+            coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.38)
             upload(forceMaterials: true)
         }
 
@@ -268,19 +269,19 @@ struct BrickSceneView: NSViewRepresentable {
             mat.diffuse.contents = color
             mat.ambient.contents = color
             mat.locksAmbientWithDiffuse = true
-            mat.roughness.contents = 0.46
+            mat.roughness.contents = 0.62
             mat.metalness.contents = 0
-            mat.specular.contents = NSColor(calibratedWhite: 0.34, alpha: 1)
-            mat.clearCoat.contents = 0.06
-            mat.clearCoatRoughness.contents = 0.55
-            mat.fresnelExponent = 1.55
+            mat.specular.contents = NSColor(calibratedWhite: 0.22, alpha: 1)
+            mat.clearCoat.contents = 0.02
+            mat.clearCoatRoughness.contents = 0.7
+            mat.fresnelExponent = 1.8
             mat.transparency = transparency
             mat.transparencyMode = .dualLayer
             mat.blendMode = .alpha
             mat.isDoubleSided = true
             mat.writesToDepthBuffer = false
             mat.readsFromDepthBuffer = true
-            mat.emission.contents = color.withAlphaComponent(0.015)
+            mat.emission.contents = color.withAlphaComponent(0.07)
             return mat
         }
 
@@ -311,12 +312,54 @@ struct BrickSceneView: NSViewRepresentable {
 
         static func complementaryInk(_ color: NSColor) -> NSColor {
             let c = color.usingColorSpace(.deviceRGB) ?? color
-            var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-            c.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-            let hue = (h + 0.5).truncatingRemainder(dividingBy: 1)
-            let sat = min(1, max(0.6, s * 0.8 + 0.35))
-            let bri: CGFloat = b > 0.58 ? 0.16 : 0.96
-            return NSColor(calibratedHue: hue, saturation: sat, brightness: bri, alpha: 1)
+            return NSColor(
+                calibratedRed: 1 - c.redComponent,
+                green: 1 - c.greenComponent,
+                blue: 1 - c.blueComponent,
+                alpha: 1
+            )
+        }
+
+        static func liquidImage(color: NSColor, letters: Bool, code: String, name: String, count: String, compact: Bool) -> NSImage {
+            let size = NSSize(width: 1024, height: 1024)
+            return NSImage(size: size, flipped: true) { rect in
+                let c = color.usingColorSpace(.deviceRGB) ?? color
+                c.setFill()
+                rect.fill()
+                NSGradient(colors: [
+                    NSColor.white.withAlphaComponent(0.28),
+                    c.withAlphaComponent(0.02),
+                    NSColor.black.withAlphaComponent(0.16),
+                ])?.draw(in: rect, angle: -78)
+                for i in 0..<22 {
+                    let u = CGFloat((i * 47) % 100) / 100
+                    let v = CGFloat((i * 73) % 100) / 100
+                    let blob = NSRect(x: u * rect.width - 60, y: v * rect.height - 50, width: 140 + CGFloat(i % 5) * 30, height: 90 + CGFloat(i % 4) * 24)
+                    NSColor.white.withAlphaComponent(i % 2 == 0 ? 0.06 : 0.035).setFill()
+                    NSBezierPath(ovalIn: blob).fill()
+                }
+                guard letters else { return true }
+                let paragraph = NSMutableParagraphStyle()
+                paragraph.alignment = .center
+                let ink = complementaryInk(c)
+                let font = NSFont(name: "MarkerFelt-Wide", size: compact ? 380 : 320)
+                    ?? NSFont.systemFont(ofSize: compact ? 380 : 320, weight: .bold)
+                (code as NSString).draw(
+                    in: NSRect(x: 40, y: compact ? 280 : 200, width: 944, height: 460),
+                    withAttributes: [.font: font, .foregroundColor: ink, .paragraphStyle: paragraph, .kern: 6]
+                )
+                if !compact {
+                    (name as NSString).draw(
+                        in: NSRect(x: 48, y: 640, width: 928, height: 120),
+                        withAttributes: [.font: NSFont.systemFont(ofSize: 62, weight: .semibold), .foregroundColor: ink, .paragraphStyle: paragraph]
+                    )
+                    (count as NSString).draw(
+                        in: NSRect(x: 48, y: 770, width: 928, height: 100),
+                        withAttributes: [.font: NSFont.systemFont(ofSize: 46, weight: .medium), .foregroundColor: ink.withAlphaComponent(0.82), .paragraphStyle: paragraph]
+                    )
+                }
+                return true
+            }
         }
 
         static func raster(_ image: NSImage) -> CGImage {
