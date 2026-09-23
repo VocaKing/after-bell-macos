@@ -100,7 +100,7 @@ struct BrickSceneView: NSViewRepresentable {
         var clickAge: Float = 0
         var clickPoint = SIMD3<Float>(0, 0.2, 0.55)
         var lastTime: TimeInterval = 0
-        let rope = SIMD3<Float>(0, 0.60, 0)
+        let rope = SIMD3<Float>(0, 0, 0.62)
 
         func build(compact: Bool) {
             guard let view, let scene = view.scene else { return }
@@ -321,13 +321,59 @@ struct BrickSceneView: NSViewRepresentable {
                 colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
             )!
             let base = raster(liquidImage(color: color, letters: false, code: "", name: "", count: "", compact: compact))
-            let letters = letterPixels(color: color, code: code, name: name, count: count, compact: compact)
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
             NSImage(cgImage: base, size: NSSize(width: w, height: h)).draw(in: NSRect(x: 0, y: 0, width: w, height: h))
-            NSImage(cgImage: letters, size: NSSize(width: w, height: h)).draw(in: NSRect(x: 0, y: 0, width: w, height: h))
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.alignment = .center
+            let black = NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
+            let font = NSFont(name: "MarkerFelt-Wide", size: compact ? 460 : 400)
+                ?? NSFont.systemFont(ofSize: compact ? 460 : 400, weight: .bold)
+            (code as NSString).draw(
+                in: NSRect(x: 40, y: compact ? 280 : 200, width: 944, height: 460),
+                withAttributes: [.font: font, .foregroundColor: black, .paragraphStyle: paragraph, .kern: 6]
+            )
+            if !compact {
+                (name as NSString).draw(
+                    in: NSRect(x: 48, y: 640, width: 928, height: 120),
+                    withAttributes: [.font: NSFont.systemFont(ofSize: 62, weight: .semibold), .foregroundColor: black, .paragraphStyle: paragraph]
+                )
+                (count as NSString).draw(
+                    in: NSRect(x: 48, y: 770, width: 928, height: 100),
+                    withAttributes: [.font: NSFont.systemFont(ofSize: 46, weight: .medium), .foregroundColor: black, .paragraphStyle: paragraph]
+                )
+            }
             NSGraphicsContext.restoreGraphicsState()
+            stampComplement(rep, color: color)
             return rep.cgImage!
+        }
+
+        static func stampComplement(_ rep: NSBitmapImageRep, color: NSColor) {
+            guard let raw = rep.bitmapData else { return }
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            let src = color.usingColorSpace(.sRGB) ?? color.usingColorSpace(.deviceRGB) ?? color
+            if !src.getRed(&r, green: &g, blue: &b, alpha: &a) { return }
+            let ir = UInt8(max(0, min(255, (1 - r) * 255)))
+            let ig = UInt8(max(0, min(255, (1 - g) * 255)))
+            let ib = UInt8(max(0, min(255, (1 - b) * 255)))
+            let br = Int(max(0, min(255, r * 255)))
+            let bg = Int(max(0, min(255, g * 255)))
+            let bb = Int(max(0, min(255, b * 255)))
+            let base = br + bg + bb
+            let bpp = max(rep.bitsPerPixel / 8, 4)
+            let row = rep.bytesPerRow
+            for y in 0..<rep.pixelsHigh {
+                for x in 0..<rep.pixelsWide {
+                    let i = y * row + x * bpp
+                    let sum = Int(raw[i]) + Int(raw[i + 1]) + Int(raw[i + 2])
+                    if sum + 100 < base {
+                        raw[i] = ir
+                        raw[i + 1] = ig
+                        raw[i + 2] = ib
+                        raw[i + 3] = 255
+                    }
+                }
+            }
         }
 
         static func letterDecal(color: NSColor, code: String, name: String, count: String, compact: Bool) -> SCNMaterial {
@@ -639,15 +685,14 @@ struct JellyMesh {
             let lagged = max(0, hoverTime - ropeDist * 0.38)
             let arrive = 1 - exp(-lagged * 14)
             let sway = sin(lagged * 13) * exp(-lagged * 1.8)
-            let center = exp(-simd_length_squared(SIMD2(r.x, r.z)) * 7.5)
-            let top = smooth01((r.y / 0.64 + 0.1) / 0.95)
-            var lift = env * arrive * (0.04 + 0.40 * center) * (0.2 + 0.8 * top)
-            lift += env * sway * 0.05 * (0.3 + 0.7 * center)
+            let center = exp(-simd_length_squared(SIMD2(r.x, r.y)) * 7.5)
+            var pull = env * arrive * (0.05 + 0.42 * center)
+            pull += env * sway * 0.05 * (0.3 + 0.7 * center)
             var t = r
-            t.y += lift
-            let pinch = lift * 1.2
-            t.x *= 1 - pinch * (0.3 + 0.7 * center)
-            t.z *= 1 - pinch * (0.3 + 0.7 * center)
+            t.z += pull
+            let pinch = pull * 0.9
+            t.x *= 1 - pinch * (0.25 + 0.75 * center)
+            t.y *= 1 - pinch * (0.25 + 0.75 * center)
             let cd = simd_length(r - click)
             let ripple = sin(cd * 16 - clickAge * 17) * exp(-cd * 2.5) * exp(-clickAge * 1.55)
             t += normal[i] * ripple * clickAmp * 0.22
