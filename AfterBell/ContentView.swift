@@ -166,7 +166,7 @@ struct MainDesk: View {
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Subject links").font(.system(size: 11, weight: .medium)).foregroundStyle(AfterBellTheme.muted).textCase(.uppercase)
-                    Text("Press a jelly — it squashes, then wobbles back. Click to open that subject.")
+                    Text("Hover lifts the jelly from the middle. Click sends a wave from that spot.")
                         .font(.system(size: 13)).foregroundStyle(AfterBellTheme.muted)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 188, maximum: 280), spacing: 12)], spacing: 10) {
                         ForEach(store.sortedSubjects) { subject in
@@ -182,7 +182,7 @@ struct MainDesk: View {
                                     hovered: hoveredBrick == subject.id,
                                     selected: store.selectedSubjectId == subject.id
                                 )
-                                .frame(height: store.sortedSubjects.count > 8 ? 196 : 248)
+                                .frame(height: store.sortedSubjects.count > 8 ? 210 : 270)
                                 .contentShape(Rectangle())
                                 .onHover { inside in
                                     hoveredBrick = inside ? subject.id : (hoveredBrick == subject.id ? nil : hoveredBrick)
