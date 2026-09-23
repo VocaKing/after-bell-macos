@@ -1,6 +1,7 @@
 import AppKit
 import SceneKit
 import SwiftUI
+import simd
 
 final class JellySCNView: SCNView {
     weak var coordinator: BrickSceneView.Coordinator?
@@ -11,20 +12,20 @@ final class JellySCNView: SCNView {
             SCNHitTestOption.searchMode: SCNHitTestSearchMode.closest.rawValue,
             SCNHitTestOption.boundingBoxOnly: false,
         ])
-        if let hit = hits.first(where: { Self.isJelly($0.node) }) {
-            let local = hit.node.convertPosition(hit.localCoordinates, to: hit.node.parent)
-            coordinator?.beginRipple(at: hit.node.name == "body" ? hit.localCoordinates : local)
+        if let hit = hits.first(where: { node in
+            var n: SCNNode? = node.node
+            while let cur = n {
+                if cur.name == "body" || cur.name == "core" || cur.name == "jelly" { return true }
+                n = cur.parent
+            }
+            return false
+        }) {
+            let local = hit.node.name == "body"
+                ? hit.localCoordinates
+                : hit.node.convertPosition(hit.localCoordinates, to: hit.node.parent)
+            coordinator?.beginRipple(SIMD3(Float(local.x), Float(local.y), Float(local.z)))
         }
         super.mouseDown(with: event)
-    }
-
-    private static func isJelly(_ node: SCNNode) -> Bool {
-        var n: SCNNode? = node
-        while let cur = n {
-            if cur.name == "body" || cur.name == "core" || cur.name == "jelly" { return true }
-            n = cur.parent
-        }
-        return false
     }
 }
 
@@ -49,7 +50,7 @@ struct BrickSceneView: NSViewRepresentable {
         view.layer?.isOpaque = false
         view.layer?.backgroundColor = NSColor.clear.cgColor
         view.autoenablesDefaultLighting = false
-        view.antialiasingMode = compact ? .multisampling2X : .multisampling4X
+        view.antialiasingMode = .multisampling4X
         view.allowsCameraControl = false
         view.isPlaying = false
         view.rendersContinuously = false
@@ -61,7 +62,7 @@ struct BrickSceneView: NSViewRepresentable {
             userInfo: nil
         ))
         context.coordinator.view = view
-        context.coordinator.build(in: view, compact: compact)
+        context.coordinator.build(compact: compact)
         context.coordinator.apply(
             color: color, code: code, name: name, count: count,
             hovered: hovered, selected: selected, compact: compact
@@ -72,6 +73,7 @@ struct BrickSceneView: NSViewRepresentable {
     func updateNSView(_ view: JellySCNView, context: Context) {
         view.coordinator = context.coordinator
         view.delegate = context.coordinator
+        context.coordinator.view = view
         context.coordinator.apply(
             color: color, code: code, name: name, count: count,
             hovered: hovered, selected: selected, compact: compact
@@ -79,33 +81,108 @@ struct BrickSceneView: NSViewRepresentable {
     }
 
     final class Coordinator: NSObject, SCNSceneRendererDelegate {
-        var jelly: SCNNode?
-        var body: SCNNode?
-        var core: SCNNode?
-        var materials: [SCNMaterial] = []
-        var lastKey = ""
         weak var view: SCNView?
-
+        var bodyNode = SCNNode()
+        var coreNode = SCNNode()
+        var mesh = JellyMesh(half: 0.64, radius: 0.30, segs: 18)
+        var faceMat = SCNMaterial()
+        var shellMat = SCNMaterial()
+        var coreMat = SCNMaterial()
+        var lastKey = ""
         var trackingHover = false
         var swiftHover = false
         var hoverWork: DispatchWorkItem?
-
-        var pull: Float = 0
-        var pullVel: Float = 0
-        var jiggle: Float = 0
+        var env: Float = 0
+        var envVel: Float = 0
         var hoverTime: Float = 0
         var wasHovering = false
-
         var clickAmp: Float = 0
-        var clickTime: Float = 0
-        var clickPoint = SCNVector3(0, 0.2, 0.55)
+        var clickAge: Float = 0
+        var clickPoint = SIMD3<Float>(0, 0.2, 0.55)
         var lastTime: TimeInterval = 0
-        var half: Float = 0.62
+        let rope = SIMD3<Float>(0, 0.60, 0)
 
-        func beginRipple(at local: SCNVector3) {
-            clickPoint = local
+        func build(compact: Bool) {
+            guard let view, let scene = view.scene else { return }
+            scene.background.contents = NSColor.clear
+            scene.rootNode.childNodes.forEach { $0.removeFromParentNode() }
+
+            let camera = SCNCamera()
+            camera.fieldOfView = 32
+            camera.zNear = 0.04
+            camera.zFar = 30
+            let cam = SCNNode()
+            cam.camera = camera
+            cam.position = SCNVector3(-0.42, 0.72, 3.25)
+            cam.look(at: SCNVector3(0, 0.06, 0))
+            scene.rootNode.addChildNode(cam)
+
+            func light(_ type: SCNLight.LightType, intensity: CGFloat, color: NSColor, at: SCNVector3) {
+                let node = SCNNode()
+                node.light = SCNLight()
+                node.light?.type = type
+                node.light?.intensity = intensity
+                node.light?.color = color
+                node.position = at
+                if type == .directional { node.look(at: SCNVector3(0, 0.1, 0)) }
+                scene.rootNode.addChildNode(node)
+            }
+            light(.ambient, intensity: 90, color: NSColor(calibratedWhite: 0.5, alpha: 1), at: .init(0, 0, 0))
+            light(.directional, intensity: 180, color: NSColor(calibratedRed: 1, green: 0.98, blue: 0.94, alpha: 1), at: .init(1.6, 2.8, 2.2))
+            light(.omni, intensity: 50, color: NSColor(calibratedRed: 0.75, green: 0.9, blue: 1, alpha: 1), at: .init(-1.4, 0.3, 1.8))
+
+            mesh = JellyMesh(half: compact ? 0.52 : 0.64, radius: compact ? 0.24 : 0.30, segs: compact ? 14 : 20)
+            bodyNode = SCNNode()
+            bodyNode.name = "body"
+            bodyNode.renderingOrder = 20
+            coreNode = SCNNode()
+            coreNode.name = "core"
+            coreNode.renderingOrder = 10
+            scene.rootNode.addChildNode(coreNode)
+            scene.rootNode.addChildNode(bodyNode)
+
+            let shadow = SCNPlane(width: 1.7, height: 1.45)
+            let sm = SCNMaterial()
+            sm.diffuse.contents = NSColor.black
+            sm.transparency = 0.32
+            sm.lightingModel = .constant
+            sm.writesToDepthBuffer = false
+            shadow.materials = [sm]
+            let shadowNode = SCNNode(geometry: shadow)
+            shadowNode.eulerAngles.x = -.pi / 2
+            shadowNode.position = SCNVector3(0.05, -0.72, 0)
+            scene.rootNode.addChildNode(shadowNode)
+            upload(forceMaterials: false)
+        }
+
+        func apply(color: NSColor, code: String, name: String, count: String, hovered: Bool, selected: Bool, compact: Bool) {
+            swiftHover = hovered
+            if hovered { wake() }
+            let rgb = color.usingColorSpace(.deviceRGB) ?? color
+            let key = "\(code)|\(name)|\(count)|\(compact)|\(rgb.redComponent)|\(rgb.greenComponent)|\(rgb.blueComponent)"
+            guard key != lastKey else { return }
+            lastKey = key
+            shellMat = Self.gelatin(rgb, transparency: 0.58)
+            faceMat = Self.gelatin(rgb, transparency: 0.34)
+            let image = Self.raster(Self.paintFace(color: rgb, code: code, name: name, count: count, compact: compact))
+            faceMat.diffuse.contents = image
+            faceMat.diffuse.magnificationFilter = .linear
+            faceMat.diffuse.minificationFilter = .linear
+            faceMat.diffuse.mipFilter = .linear
+            coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.18)
+            upload(forceMaterials: true)
+        }
+
+        func beginRipple(_ point: SIMD3<Float>) {
+            clickPoint = point
             clickAmp = 1
-            clickTime = 0
+            clickAge = 0
+            let n = mesh.pos.count
+            for i in 0..<n {
+                let d = simd_length(mesh.rest[i] - point)
+                let w = exp(-d * d * 14)
+                mesh.vel[i] += mesh.normal[i] * w * 3.2
+            }
             wake()
         }
 
@@ -122,7 +199,7 @@ struct BrickSceneView: NSViewRepresentable {
                 self?.wake()
             }
             hoverWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: work)
         }
 
         func wake() {
@@ -130,250 +207,75 @@ struct BrickSceneView: NSViewRepresentable {
             view?.rendersContinuously = true
         }
 
-        func build(in view: SCNView, compact: Bool) {
-            let scene = SCNScene()
-            view.scene = scene
-            scene.background.contents = NSColor.clear
-
-            let camera = SCNCamera()
-            camera.fieldOfView = compact ? 30 : 34
-            camera.zNear = 0.04
-            camera.zFar = 40
-            camera.wantsHDR = false
-            let camNode = SCNNode()
-            camNode.camera = camera
-            camNode.position = compact
-                ? SCNVector3(-0.28, 0.48, 2.70)
-                : SCNVector3(-0.38, 0.58, 3.15)
-            camNode.look(at: SCNVector3(0, 0.08, 0))
-            scene.rootNode.addChildNode(camNode)
-
-            let ambient = SCNNode()
-            ambient.light = SCNLight()
-            ambient.light?.type = .ambient
-            ambient.light?.intensity = 80
-            ambient.light?.color = NSColor(calibratedWhite: 0.45, alpha: 1)
-            scene.rootNode.addChildNode(ambient)
-
-            let key = SCNNode()
-            key.light = SCNLight()
-            key.light?.type = .directional
-            key.light?.intensity = 160
-            key.light?.color = NSColor(calibratedRed: 1, green: 0.98, blue: 0.94, alpha: 1)
-            key.position = SCNVector3(1.4, 2.6, 2.4)
-            key.look(at: SCNVector3(0, 0.1, 0))
-            scene.rootNode.addChildNode(key)
-
-            let fill = SCNNode()
-            fill.light = SCNLight()
-            fill.light?.type = .omni
-            fill.light?.intensity = 46
-            fill.light?.color = NSColor(calibratedRed: 0.82, green: 0.92, blue: 1, alpha: 1)
-            fill.position = SCNVector3(-1.5, 0.4, 1.6)
-            scene.rootNode.addChildNode(fill)
-
-            let root = SCNNode()
-            root.name = "jelly"
-            scene.rootNode.addChildNode(root)
-            jelly = root
-
-            half = compact ? 0.50 : 0.62
-            let mesh = Self.roundedCube(half: CGFloat(half), radius: CGFloat(half) * 0.46, segs: compact ? 12 : 16)
-            let bodyNode = SCNNode(geometry: mesh.geometry)
-            bodyNode.name = "body"
-            bodyNode.renderingOrder = 20
-            root.addChildNode(bodyNode)
-            body = bodyNode
-
-            let coreMesh = Self.roundedCube(half: CGFloat(half), radius: CGFloat(half) * 0.46, segs: compact ? 8 : 10)
-            let coreNode = SCNNode(geometry: coreMesh.geometry)
-            coreNode.scale = SCNVector3(0.42, 0.42, 0.42)
-            coreNode.name = "core"
-            coreNode.renderingOrder = 10
-            root.addChildNode(coreNode)
-            core = coreNode
-
-            let shadow = SCNPlane(width: CGFloat(half) * 2.6, height: CGFloat(half) * 2.2)
-            let sm = SCNMaterial()
-            sm.diffuse.contents = NSColor.black
-            sm.transparency = 0.35
-            sm.lightingModel = .constant
-            sm.writesToDepthBuffer = false
-            shadow.materials = [sm]
-            let shadowNode = SCNNode(geometry: shadow)
-            shadowNode.eulerAngles.x = -.pi / 2
-            shadowNode.position = SCNVector3(0.06, -half - 0.08, 0.02)
-            scene.rootNode.addChildNode(shadowNode)
-
-            materials = []
-            pushUniforms(force: true)
-        }
-
-        func apply(
-            color: NSColor,
-            code: String,
-            name: String,
-            count: String,
-            hovered: Bool,
-            selected: Bool,
-            compact: Bool
-        ) {
-            swiftHover = hovered
-            if hovered { wake() }
-            let rgb = color.usingColorSpace(.deviceRGB) ?? color
-            let key = "\(code)|\(name)|\(count)|\(compact)|\(rgb.redComponent)|\(rgb.greenComponent)|\(rgb.blueComponent)"
-            guard key != lastKey, let body, let core else { return }
-            lastKey = key
-            let shell = Self.shellMaterial(rgb)
-            let face = Self.faceMaterial(rgb, code: code, name: name, count: count, compact: compact)
-            body.geometry?.materials = [face, shell]
-            let nugget = Self.shellMaterial(Self.richer(rgb))
-            nugget.transparency = 0.22
-            core.geometry?.materials = [nugget, nugget]
-            materials = [face, shell, nugget]
-            pushUniforms(force: true)
-        }
-
         func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
-            let dt = lastTime == 0 ? 0.016 : Float(min(0.05, time - lastTime))
+            let dt = lastTime == 0 ? Float(1.0 / 60.0) : Float(min(0.033, time - lastTime))
             lastTime = time
-
             let hovering = trackingHover || swiftHover
-            if hovering && !wasHovering {
-                hoverTime = 0
-                jiggle = max(jiggle, 0.35)
+            if hovering != wasHovering {
+                if hovering { hoverTime = 0 }
+                wasHovering = hovering
             }
-            if !hovering && wasHovering {
-                jiggle = max(jiggle, 0.85)
-            }
-            wasHovering = hovering
             hoverTime += dt
-
             let target: Float = hovering ? 1 : 0
-            let accel = (target - pull) * 70 - pullVel * 8.5
-            pullVel += accel * dt
-            pull += pullVel * dt
-            pull = min(1.4, max(-0.2, pull))
-            jiggle *= exp(-1.6 * dt)
-            clickAmp *= exp(-2.15 * dt)
-            clickTime += dt
+            envVel += ((target - env) * 64 - envVel * 9) * dt
+            env += envVel * dt
+            clickAmp *= exp(-1.8 * dt)
+            clickAge += dt
 
-            pushUniforms(force: false)
-
-            let resting = abs(pull) < 0.012 && abs(pullVel) < 0.012 && jiggle < 0.02 && clickAmp < 0.02 && !hovering
-            if resting {
+            let moving = abs(env) > 0.01 || abs(envVel) > 0.01 || clickAmp > 0.02 || mesh.energy() > 0.0004
+            if !moving && !hovering {
                 DispatchQueue.main.async { [weak self] in
-                    self?.view?.rendersContinuously = false
-                    self?.view?.isPlaying = false
+                    guard let self, !(self.trackingHover || self.swiftHover) else { return }
+                    self.view?.rendersContinuously = false
+                    self.view?.isPlaying = false
                 }
                 lastTime = 0
+                return
             }
-        }
 
-        func pushUniforms(force: Bool) {
-            guard force || !materials.isEmpty else { return }
-            for mat in materials {
-                mat.setValue(NSNumber(value: pull), forKey: "uPull")
-                mat.setValue(NSNumber(value: jiggle), forKey: "uJiggle")
-                mat.setValue(NSNumber(value: hoverTime), forKey: "uTime")
-                mat.setValue(NSNumber(value: clickAmp), forKey: "uClick")
-                mat.setValue(NSNumber(value: clickTime), forKey: "uClickTime")
-                mat.setValue(NSNumber(value: Float(clickPoint.x)), forKey: "uClickX")
-                mat.setValue(NSNumber(value: Float(clickPoint.y)), forKey: "uClickY")
-                mat.setValue(NSNumber(value: Float(clickPoint.z)), forKey: "uClickZ")
-                mat.setValue(NSNumber(value: half), forKey: "uHalf")
+            let h = dt / 3
+            for _ in 0..<3 {
+                mesh.step(h: h, env: env, hoverTime: hoverTime, rope: rope, click: clickPoint, clickAmp: clickAmp, clickAge: clickAge)
             }
+            mesh.recomputeNormals()
+            upload(forceMaterials: false)
         }
 
-        static let liquidShader = """
-        #pragma arguments
-        float uPull;
-        float uJiggle;
-        float uTime;
-        float uClick;
-        float uClickTime;
-        float uClickX;
-        float uClickY;
-        float uClickZ;
-        float uHalf;
+        func upload(forceMaterials: Bool) {
+            let body = mesh.makeGeometry()
+            if forceMaterials || bodyNode.geometry?.materials.count != 2 {
+                body.materials = [faceMat, shellMat]
+            } else if let existing = bodyNode.geometry?.materials, existing.count == 2 {
+                body.materials = existing
+            } else {
+                body.materials = [faceMat, shellMat]
+            }
+            bodyNode.geometry = body
 
-        #pragma body
-        vec3 p = _geometry.position.xyz;
-        vec3 n = _geometry.normal.xyz;
-        float h = max(uHalf, 0.2);
-        vec3 rope = vec3(0.0, h * 0.92, 0.0);
-        float ropeDist = length(p - rope);
-        float lagged = max(uTime - ropeDist * 0.42, 0.0);
-        float rise = 1.0 - exp(-lagged * 12.0);
-        float sway = sin(lagged * 12.5) * exp(-lagged * 1.7);
-        float center = exp(-dot(p.xz, p.xz) / (h * h) * 2.4);
-        float top = smoothstep(-0.15, 0.9, p.y / h);
-        float lift = uPull * rise * (0.05 + 0.34 * center) * (0.28 + 0.72 * top);
-        lift += uPull * sway * 0.045 * (0.25 + 0.75 * center);
-        float echo = sin(uTime * 9.0 - ropeDist * 5.5) * exp(-ropeDist * 1.3);
-        lift += uJiggle * echo * 0.07 * (0.35 + 0.65 * center);
-
-        p.y += lift;
-        float pinch = lift * 1.15;
-        p.x *= 1.0 - pinch * (0.35 + 0.65 * center);
-        p.z *= 1.0 - pinch * (0.35 + 0.65 * center);
-        p.x += uJiggle * p.x * echo * 0.18;
-        p.z += uJiggle * p.z * echo * 0.18;
-
-        vec3 clickP = vec3(uClickX, uClickY, uClickZ);
-        float dist = length(p - clickP);
-        float ripple = sin(dist * 18.0 - uClickTime * 16.0);
-        float ring = exp(-dist * 2.6) * exp(-uClickTime * 1.65);
-        p += n * ripple * ring * uClick * 0.20;
-        p.y += abs(ripple) * ring * uClick * 0.04;
-
-        _geometry.position.xyz = p;
-        _geometry.normal.xyz = normalize(n + vec3(ripple * uClick * 0.8, lift * 2.0, 0.0));
-        """
-
-        static func installLiquid(_ mat: SCNMaterial) {
-            mat.shaderModifiers = [.geometry: liquidShader]
-            mat.setValue(NSNumber(value: Float(0)), forKey: "uPull")
-            mat.setValue(NSNumber(value: Float(0)), forKey: "uJiggle")
-            mat.setValue(NSNumber(value: Float(0)), forKey: "uTime")
-            mat.setValue(NSNumber(value: Float(0)), forKey: "uClick")
-            mat.setValue(NSNumber(value: Float(0)), forKey: "uClickTime")
-            mat.setValue(NSNumber(value: Float(0)), forKey: "uClickX")
-            mat.setValue(NSNumber(value: Float(0)), forKey: "uClickY")
-            mat.setValue(NSNumber(value: Float(0.5)), forKey: "uClickZ")
-            mat.setValue(NSNumber(value: Float(0.62)), forKey: "uHalf")
+            let core = mesh.makeCoreGeometry(scale: 0.46)
+            core.materials = [coreMat, coreMat]
+            coreNode.geometry = core
         }
 
-        static func shellMaterial(_ color: NSColor) -> SCNMaterial {
+        static func gelatin(_ color: NSColor, transparency: CGFloat) -> SCNMaterial {
             let mat = SCNMaterial()
             mat.lightingModel = .physicallyBased
-            mat.diffuse.contents = color.withAlphaComponent(0.88)
+            mat.diffuse.contents = color
             mat.ambient.contents = color
             mat.locksAmbientWithDiffuse = true
-            mat.roughness.contents = 0.14
+            mat.roughness.contents = 0.12
             mat.metalness.contents = 0
-            mat.specular.contents = NSColor(calibratedWhite: 0.72, alpha: 1)
-            mat.clearCoat.contents = 0.35
-            mat.clearCoatRoughness.contents = 0.08
-            mat.fresnelExponent = 0.7
-            mat.transparency = 0.58
+            mat.specular.contents = NSColor(calibratedWhite: 0.8, alpha: 1)
+            mat.clearCoat.contents = 0.45
+            mat.clearCoatRoughness.contents = 0.06
+            mat.fresnelExponent = 0.65
+            mat.transparency = transparency
             mat.transparencyMode = .dualLayer
             mat.blendMode = .alpha
             mat.isDoubleSided = true
             mat.writesToDepthBuffer = false
             mat.readsFromDepthBuffer = true
-            mat.emission.contents = color.withAlphaComponent(0.05)
-            installLiquid(mat)
-            return mat
-        }
-
-        static func faceMaterial(_ color: NSColor, code: String, name: String, count: String, compact: Bool) -> SCNMaterial {
-            let mat = shellMaterial(color)
-            let image = raster(paintFace(color: color, code: code, name: name, count: count, compact: compact))
-            mat.diffuse.contents = image
-            mat.transparent.contents = image
-            mat.transparencyMode = .aOne
-            mat.transparency = 0.15
+            mat.emission.contents = color.withAlphaComponent(0.04)
             return mat
         }
 
@@ -381,7 +283,7 @@ struct BrickSceneView: NSViewRepresentable {
             let c = color.usingColorSpace(.deviceRGB) ?? color
             var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
             c.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-            return NSColor(calibratedHue: h, saturation: min(1, s * 1.1 + 0.1), brightness: max(0.2, b * 0.78), alpha: 1)
+            return NSColor(calibratedHue: h, saturation: min(1, s + 0.12), brightness: max(0.22, b * 0.75), alpha: 1)
         }
 
         static func complementaryInk(_ color: NSColor) -> NSColor {
@@ -389,106 +291,21 @@ struct BrickSceneView: NSViewRepresentable {
             var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
             c.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
             let hue = (h + 0.5).truncatingRemainder(dividingBy: 1)
-            let sat = min(1, max(0.55, s * 0.85 + 0.3))
-            let bri: CGFloat = b > 0.6 ? 0.18 : 0.96
+            let sat = min(1, max(0.6, s * 0.8 + 0.35))
+            let bri: CGFloat = b > 0.58 ? 0.16 : 0.96
             return NSColor(calibratedHue: hue, saturation: sat, brightness: bri, alpha: 1)
-        }
-
-        struct CubeMesh {
-            var geometry: SCNGeometry
-        }
-
-        static func roundedCube(half: CGFloat, radius: CGFloat, segs: Int) -> CubeMesh {
-            var positions: [SCNVector3] = []
-            var normals: [SCNVector3] = []
-            var uvs: [CGPoint] = []
-            var front: [UInt32] = []
-            var shell: [UInt32] = []
-
-            func project(_ p: SCNVector3) -> (SCNVector3, SCNVector3) {
-                let r = min(radius, half * 0.8)
-                let inner = max(half - r, 0.02)
-                let cx = min(max(p.x, -inner), inner)
-                let cy = min(max(p.y, -inner), inner)
-                let cz = min(max(p.z, -inner), inner)
-                let dx = p.x - cx, dy = p.y - cy, dz = p.z - cz
-                let len = sqrt(dx * dx + dy * dy + dz * dz)
-                if len < 1e-5 {
-                    let ax = abs(p.x), ay = abs(p.y), az = abs(p.z)
-                    var n = SCNVector3Zero
-                    if ax >= ay && ax >= az { n.x = p.x >= 0 ? 1 : -1 }
-                    else if ay >= az { n.y = p.y >= 0 ? 1 : -1 }
-                    else { n.z = p.z >= 0 ? 1 : -1 }
-                    return (p, n)
-                }
-                let n = SCNVector3(dx / len, dy / len, dz / len)
-                return (SCNVector3(cx + n.x * r, cy + n.y * r, cz + n.z * r), n)
-            }
-
-            func emit(_ point: (CGFloat, CGFloat) -> SCNVector3, into bucket: inout [UInt32]) {
-                let start = UInt32(positions.count)
-                for j in 0...segs {
-                    let v = CGFloat(j) / CGFloat(segs)
-                    for i in 0...segs {
-                        let u = CGFloat(i) / CGFloat(segs)
-                        let (pos, nor) = project(point(u * 2 - 1, v * 2 - 1))
-                        positions.append(pos)
-                        normals.append(nor)
-                        uvs.append(CGPoint(x: u, y: 1 - v))
-                    }
-                }
-                let row = UInt32(segs + 1)
-                for j in 0..<UInt32(segs) {
-                    for i in 0..<UInt32(segs) {
-                        let a = start + j * row + i
-                        let b = a + 1
-                        let c = a + row
-                        let d = c + 1
-                        bucket.append(contentsOf: [a, b, c, b, d, c])
-                    }
-                }
-            }
-
-            emit({ u, v in SCNVector3(u * half, v * half, half) }, into: &front)
-            emit({ u, v in SCNVector3(half, v * half, -u * half) }, into: &shell)
-            emit({ u, v in SCNVector3(-u * half, v * half, -half) }, into: &shell)
-            emit({ u, v in SCNVector3(-half, v * half, u * half) }, into: &shell)
-            emit({ u, v in SCNVector3(u * half, half, -v * half) }, into: &shell)
-            emit({ u, v in SCNVector3(u * half, -half, v * half) }, into: &shell)
-
-            let geo = SCNGeometry(
-                sources: [
-                    SCNGeometrySource(vertices: positions),
-                    SCNGeometrySource(normals: normals),
-                    SCNGeometrySource(textureCoordinates: uvs),
-                ],
-                elements: [
-                    SCNGeometryElement(indices: front, primitiveType: .triangles),
-                    SCNGeometryElement(indices: shell, primitiveType: .triangles),
-                ]
-            )
-            return CubeMesh(geometry: geo)
         }
 
         static func raster(_ image: NSImage) -> CGImage {
             let width = max(Int(image.size.width), 1)
             let height = max(Int(image.size.height), 1)
             let rep = NSBitmapImageRep(
-                bitmapDataPlanes: nil,
-                pixelsWide: width,
-                pixelsHigh: height,
-                bitsPerSample: 8,
-                samplesPerPixel: 4,
-                hasAlpha: true,
-                isPlanar: false,
-                colorSpaceName: .deviceRGB,
-                bytesPerRow: 0,
-                bitsPerPixel: 0
+                bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
             )!
-            let ctx = NSGraphicsContext(bitmapImageRep: rep)!
             NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = ctx
-            ctx.imageInterpolation = .high
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
             image.draw(in: NSRect(x: 0, y: 0, width: width, height: height))
             NSGraphicsContext.restoreGraphicsState()
             return rep.cgImage!
@@ -497,49 +314,249 @@ struct BrickSceneView: NSViewRepresentable {
         static func paintFace(color: NSColor, code: String, name: String, count: String, compact: Bool) -> NSImage {
             let size = NSSize(width: 1024, height: 1024)
             return NSImage(size: size, flipped: true) { rect in
-                NSGraphicsContext.current?.shouldAntialias = true
-                color.withAlphaComponent(0.5).setFill()
+                color.setFill()
                 rect.fill()
                 let paragraph = NSMutableParagraphStyle()
                 paragraph.alignment = .center
                 let ink = complementaryInk(color)
-                let mute = ink.withAlphaComponent(0.8)
-                let monogram = displayFont(size: compact ? 360 : 300)
+                let mute = ink.withAlphaComponent(0.78)
+                let font = NSFont(name: "MarkerFelt-Wide", size: compact ? 340 : 280)
+                    ?? NSFont.systemFont(ofSize: compact ? 340 : 280, weight: .bold)
                 (code as NSString).draw(
-                    in: NSRect(x: 40, y: compact ? 280 : 160, width: 944, height: compact ? 460 : 420),
-                    withAttributes: [
-                        .font: monogram,
-                        .foregroundColor: ink,
-                        .paragraphStyle: paragraph,
-                        .kern: 4,
-                    ]
+                    in: NSRect(x: 40, y: compact ? 300 : 180, width: 944, height: 420),
+                    withAttributes: [.font: font, .foregroundColor: ink, .paragraphStyle: paragraph, .kern: 4]
                 )
                 if !compact {
                     (name as NSString).draw(
-                        in: NSRect(x: 40, y: 600, width: 944, height: 140),
-                        withAttributes: [
-                            .font: NSFont.systemFont(ofSize: 72, weight: .semibold),
-                            .foregroundColor: ink,
-                            .paragraphStyle: paragraph,
-                        ]
+                        in: NSRect(x: 40, y: 620, width: 944, height: 130),
+                        withAttributes: [.font: NSFont.systemFont(ofSize: 64, weight: .semibold), .foregroundColor: ink, .paragraphStyle: paragraph]
                     )
                     (count as NSString).draw(
-                        in: NSRect(x: 40, y: 760, width: 944, height: 120),
-                        withAttributes: [
-                            .font: NSFont.systemFont(ofSize: 56, weight: .medium),
-                            .foregroundColor: mute,
-                            .paragraphStyle: paragraph,
-                        ]
+                        in: NSRect(x: 40, y: 770, width: 944, height: 110),
+                        withAttributes: [.font: NSFont.systemFont(ofSize: 48, weight: .medium), .foregroundColor: mute, .paragraphStyle: paragraph]
                     )
                 }
                 return true
             }
         }
+    }
+}
 
-        static func displayFont(size: CGFloat) -> NSFont {
-            NSFont(name: "MarkerFelt-Wide", size: size)
-                ?? NSFont(name: "Noteworthy-Bold", size: size)
-                ?? NSFont.systemFont(ofSize: size, weight: .bold)
+func smooth01(_ x: Float) -> Float {
+    let t = min(1, max(0, x))
+    return t * t * (3 - 2 * t)
+}
+
+struct JellyMesh {
+    var rest: [SIMD3<Float>] = []
+    var pos: [SIMD3<Float>] = []
+    var vel: [SIMD3<Float>] = []
+    var normal: [SIMD3<Float>] = []
+    var uv: [CGPoint] = []
+    var neighbors: [[Int]] = []
+    var front: [UInt32] = []
+    var shell: [UInt32] = []
+    var tris: [(Int, Int, Int)] = []
+
+    init(half: Float, radius: Float, segs: Int) {
+        func project(_ p: SIMD3<Float>) -> (SIMD3<Float>, SIMD3<Float>) {
+            let r = min(radius, half * 0.82)
+            let inner = max(half - r, 0.02)
+            let c = simd_clamp(p, SIMD3(repeating: -inner), SIMD3(repeating: inner))
+            let d = p - c
+            let len = simd_length(d)
+            if len < 1e-5 {
+                let a = abs(p)
+                var n = SIMD3<Float>(0, 0, 0)
+                if a.x >= a.y && a.x >= a.z { n.x = p.x >= 0 ? 1 : -1 }
+                else if a.y >= a.z { n.y = p.y >= 0 ? 1 : -1 }
+                else { n.z = p.z >= 0 ? 1 : -1 }
+                return (p, n)
+            }
+            let n = d / len
+            return (c + n * r, n)
         }
+
+        func emit(_ point: (Float, Float) -> SIMD3<Float>, into bucket: inout [UInt32]) {
+            let start = rest.count
+            for j in 0...segs {
+                let v = Float(j) / Float(segs)
+                for i in 0...segs {
+                    let u = Float(i) / Float(segs)
+                    let (p, n) = project(point(u * 2 - 1, v * 2 - 1))
+                    rest.append(p)
+                    pos.append(p)
+                    vel.append(.zero)
+                    normal.append(n)
+                    uv.append(CGPoint(x: CGFloat(u), y: CGFloat(1 - v)))
+                    neighbors.append([])
+                }
+            }
+            let row = segs + 1
+            for j in 0..<segs {
+                for i in 0..<segs {
+                    let a = start + j * row + i
+                    let b = a + 1
+                    let c = a + row
+                    let d = c + 1
+                    bucket.append(contentsOf: [UInt32(a), UInt32(b), UInt32(c), UInt32(b), UInt32(d), UInt32(c)])
+                    tris.append((a, b, c))
+                    tris.append((b, d, c))
+                    link(a, b); link(a, c); link(b, d); link(c, d)
+                }
+            }
+        }
+
+        emit({ u, v in SIMD3(u * half, v * half, half) }, into: &front)
+        emit({ u, v in SIMD3(half, v * half, -u * half) }, into: &shell)
+        emit({ u, v in SIMD3(-u * half, v * half, -half) }, into: &shell)
+        emit({ u, v in SIMD3(-half, v * half, u * half) }, into: &shell)
+        emit({ u, v in SIMD3(u * half, half, -v * half) }, into: &shell)
+        emit({ u, v in SIMD3(u * half, -half, v * half) }, into: &shell)
+        weldEdges()
+        recomputeNormals()
+    }
+
+    mutating func link(_ a: Int, _ b: Int) {
+        if a == b { return }
+        if !neighbors[a].contains(b) { neighbors[a].append(b) }
+        if !neighbors[b].contains(a) { neighbors[b].append(a) }
+    }
+
+    mutating func weldEdges() {
+        let n = rest.count
+        let cell: Float = 0.02
+        var buckets: [Int: [Int]] = [:]
+        func bucket(_ p: SIMD3<Float>) -> Int {
+            let x = Int(p.x / cell)
+            let y = Int(p.y / cell)
+            let z = Int(p.z / cell)
+            return (x + 80) * 20000 + (y + 80) * 200 + (z + 80)
+        }
+        for i in 0..<n {
+            buckets[bucket(rest[i]), default: []].append(i)
+        }
+        for i in 0..<n {
+            let x = Int(rest[i].x / cell)
+            let y = Int(rest[i].y / cell)
+            let z = Int(rest[i].z / cell)
+            for dx in -1...1 {
+                for dy in -1...1 {
+                    for dz in -1...1 {
+                        let key = (x + dx + 80) * 20000 + (y + dy + 80) * 200 + (z + dz + 80)
+                        guard let list = buckets[key] else { continue }
+                        for j in list where j > i {
+                            if simd_length(rest[i] - rest[j]) < 0.012 { link(i, j) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    mutating func step(h: Float, env: Float, hoverTime: Float, rope: SIMD3<Float>, click: SIMD3<Float>, clickAmp: Float, clickAge: Float) {
+        let n = pos.count
+        var target = rest
+        for i in 0..<n {
+            let r = rest[i]
+            let ropeDist = simd_length(r - rope)
+            let lagged = max(0, hoverTime - ropeDist * 0.38)
+            let arrive = 1 - exp(-lagged * 14)
+            let sway = sin(lagged * 13) * exp(-lagged * 1.8)
+            let center = exp(-simd_length_squared(SIMD2(r.x, r.z)) * 7.5)
+            let top = smooth01((r.y / 0.64 + 0.1) / 0.95)
+            var lift = env * arrive * (0.04 + 0.40 * center) * (0.2 + 0.8 * top)
+            lift += env * sway * 0.05 * (0.3 + 0.7 * center)
+            var t = r
+            t.y += lift
+            let pinch = lift * 1.2
+            t.x *= 1 - pinch * (0.3 + 0.7 * center)
+            t.z *= 1 - pinch * (0.3 + 0.7 * center)
+
+            let cd = simd_length(r - click)
+            let ripple = sin(cd * 16 - clickAge * 17) * exp(-cd * 2.5) * exp(-clickAge * 1.55)
+            t += normal[i] * ripple * clickAmp * 0.22
+            target[i] = t
+        }
+
+        for i in 0..<n {
+            var f = (target[i] - pos[i]) * 55 - vel[i] * 7.2
+            if !neighbors[i].isEmpty {
+                var avg = SIMD3<Float>(repeating: 0)
+                for j in neighbors[i] { avg += pos[j] - rest[j] }
+                avg /= Float(neighbors[i].count)
+                let own = pos[i] - rest[i]
+                f += (avg - own) * 38
+            }
+            vel[i] += f * h
+            pos[i] += vel[i] * h
+            let delta = pos[i] - rest[i]
+            let mag = simd_length(delta)
+            if mag > 0.48 {
+                pos[i] = rest[i] + delta / mag * 0.48
+                vel[i] *= 0.45
+            }
+        }
+    }
+
+    func energy() -> Float {
+        var e: Float = 0
+        for v in vel { e = max(e, simd_length_squared(v)) }
+        return e
+    }
+
+    mutating func recomputeNormals() {
+        var acc = [SIMD3<Float>](repeating: .zero, count: pos.count)
+        for tri in tris {
+            let a = pos[tri.0], b = pos[tri.1], c = pos[tri.2]
+            let n = simd_cross(b - a, c - a)
+            acc[tri.0] += n
+            acc[tri.1] += n
+            acc[tri.2] += n
+        }
+        for i in 0..<acc.count {
+            let len = simd_length(acc[i])
+            if len > 1e-6 {
+                var n = acc[i] / len
+                if simd_dot(n, rest[i]) < 0 { n = -n }
+                normal[i] = n
+            }
+        }
+    }
+
+    func makeGeometry() -> SCNGeometry {
+        geometry(positions: pos)
+    }
+
+    func makeCoreGeometry(scale: Float) -> SCNGeometry {
+        var inner = rest
+        for i in 0..<rest.count {
+            inner[i] = rest[i] * scale + (pos[i] - rest[i]) * (scale + 0.12)
+        }
+        return geometry(positions: inner)
+    }
+
+    func geometry(positions: [SIMD3<Float>]) -> SCNGeometry {
+        var verts: [SCNVector3] = []
+        var norms: [SCNVector3] = []
+        verts.reserveCapacity(positions.count)
+        norms.reserveCapacity(positions.count)
+        for i in 0..<positions.count {
+            let p = positions[i]
+            let n = normal[i]
+            verts.append(SCNVector3(p.x, p.y, p.z))
+            norms.append(SCNVector3(n.x, n.y, n.z))
+        }
+        return SCNGeometry(
+            sources: [
+                SCNGeometrySource(vertices: verts),
+                SCNGeometrySource(normals: norms),
+                SCNGeometrySource(textureCoordinates: uv),
+            ],
+            elements: [
+                SCNGeometryElement(indices: front, primitiveType: .triangles),
+                SCNGeometryElement(indices: shell, primitiveType: .triangles),
+            ]
+        )
     }
 }
