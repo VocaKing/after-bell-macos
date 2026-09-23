@@ -3,12 +3,13 @@ import SwiftUI
 struct ContentView: View {
     @Environment(HomeworkStore.self) private var store
     @State private var hoveredBrick: String?
+    @State private var hoverPoint: CGPoint = .zero
 
     var body: some View {
         HStack(spacing: 0) {
             Sidebar().frame(width: 268)
             Divider().overlay(Color.white.opacity(0.08))
-            MainDesk(hoveredBrick: $hoveredBrick)
+            MainDesk(hoveredBrick: $hoveredBrick, hoverPoint: $hoverPoint)
         }
         .padding(.top, 44)
         .background {
@@ -156,6 +157,7 @@ struct WeekRing: View {
 struct MainDesk: View {
     @Environment(HomeworkStore.self) private var store
     @Binding var hoveredBrick: String?
+    @Binding var hoverPoint: CGPoint
     private let hour = Calendar.current.component(.hour, from: Date())
     var body: some View {
         ScrollView {
@@ -181,12 +183,19 @@ struct MainDesk: View {
                                     name: subject.name,
                                     count: open == 0 ? "Clear" : "\(open) open",
                                     hovered: hoveredBrick == subject.id,
+                                    pointer: hoveredBrick == subject.id ? hoverPoint : nil,
                                     selected: store.selectedSubjectId == subject.id
                                 )
                                 .frame(height: store.sortedSubjects.count > 8 ? 210 : 270)
                                 .contentShape(Rectangle())
-                                .onHover { inside in
-                                    hoveredBrick = inside ? subject.id : (hoveredBrick == subject.id ? nil : hoveredBrick)
+                                .onContinuousHover { phase in
+                                    switch phase {
+                                    case .active(let location):
+                                        hoveredBrick = subject.id
+                                        hoverPoint = location
+                                    case .ended:
+                                        if hoveredBrick == subject.id { hoveredBrick = nil }
+                                    }
                                 }
                             }
                             .buttonStyle(.plain)
