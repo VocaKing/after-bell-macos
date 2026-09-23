@@ -166,7 +166,7 @@ struct MainDesk: View {
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Subject links").font(.system(size: 11, weight: .medium)).foregroundStyle(AfterBellTheme.muted).textCase(.uppercase)
-                    Text("Hover lifts the jelly from the middle. Click sends a wave from that spot.")
+                    Text("Hover pulls the jelly out toward you, following the cursor. Click sends a wave from that spot.")
                         .font(.system(size: 13)).foregroundStyle(AfterBellTheme.muted)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 188, maximum: 280), spacing: 12)], spacing: 10) {
                         ForEach(store.sortedSubjects) { subject in
@@ -176,6 +176,7 @@ struct MainDesk: View {
                             } label: {
                                 BrickSceneView(
                                     color: AfterBellTheme.brickNSColor(subject),
+                                    fillHex: subject.fill.isEmpty ? AfterBellTheme.brickHex(subject.order) : subject.fill,
                                     code: subject.code,
                                     name: subject.name,
                                     count: open == 0 ? "Clear" : "\(open) open",
