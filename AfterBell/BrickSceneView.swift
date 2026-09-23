@@ -167,15 +167,18 @@ struct BrickSceneView: NSViewRepresentable {
             let key = "\(code)|\(name)|\(count)|\(compact)|\(rgb.redComponent)|\(rgb.greenComponent)|\(rgb.blueComponent)"
             guard key != lastKey else { return }
             lastKey = key
-            shellMat = Self.gelatin(rgb, transparency: 0.30)
+            shellMat = Self.gelatin(rgb, transparency: 0.52)
             shellMat.diffuse.contents = Self.raster(Self.liquidImage(color: rgb, letters: false, code: "", name: "", count: "", compact: compact))
-            faceMat = Self.gelatin(rgb, transparency: 0.14)
+            faceMat = Self.gelatin(rgb, transparency: 0.06)
+            faceMat.lightingModel = .constant
+            faceMat.emission.contents = NSColor.black
+            faceMat.locksAmbientWithDiffuse = false
             let image = Self.raster(Self.liquidImage(color: rgb, letters: true, code: code, name: name, count: count, compact: compact))
             faceMat.diffuse.contents = image
             faceMat.diffuse.magnificationFilter = .linear
             faceMat.diffuse.minificationFilter = .linear
             faceMat.diffuse.mipFilter = .linear
-            coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.38)
+            coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.28)
             upload(forceMaterials: true)
         }
 
@@ -342,8 +345,8 @@ struct BrickSceneView: NSViewRepresentable {
                 let paragraph = NSMutableParagraphStyle()
                 paragraph.alignment = .center
                 let ink = complementaryInk(c)
-                let font = NSFont(name: "MarkerFelt-Wide", size: compact ? 380 : 320)
-                    ?? NSFont.systemFont(ofSize: compact ? 380 : 320, weight: .bold)
+                let font = NSFont(name: "MarkerFelt-Wide", size: compact ? 460 : 400)
+                    ?? NSFont.systemFont(ofSize: compact ? 460 : 400, weight: .bold)
                 (code as NSString).draw(
                     in: NSRect(x: 40, y: compact ? 280 : 200, width: 944, height: 460),
                     withAttributes: [.font: font, .foregroundColor: ink, .paragraphStyle: paragraph, .kern: 6]
