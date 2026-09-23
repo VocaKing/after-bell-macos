@@ -171,13 +171,12 @@ struct BrickSceneView: NSViewRepresentable {
             shellMat.diffuse.contents = Self.raster(Self.liquidImage(color: rgb, letters: false, code: "", name: "", count: "", compact: compact))
             faceMat = Self.gelatin(rgb, transparency: 0.16)
             faceMat.lightingModel = .constant
-            faceMat.emission.contents = NSColor.black
             faceMat.locksAmbientWithDiffuse = false
-            let image = Self.raster(Self.liquidImage(color: rgb, letters: true, code: code, name: name, count: count, compact: compact))
-            faceMat.diffuse.contents = image
-            faceMat.diffuse.magnificationFilter = .linear
-            faceMat.diffuse.minificationFilter = .linear
-            faceMat.diffuse.mipFilter = .linear
+            faceMat.multiply.contents = NSColor.white
+            faceMat.ambient.contents = NSColor.black
+            faceMat.emission.contents = NSColor.black
+            faceMat.shaderModifiers = nil
+            faceMat.diffuse.contents = Self.faceImage(color: rgb, code: code, name: name, count: count, compact: compact)
             coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.40)
             upload(forceMaterials: true)
         }
@@ -311,6 +310,88 @@ struct BrickSceneView: NSViewRepresentable {
             var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
             c.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
             return NSColor(calibratedHue: h, saturation: min(1, s + 0.12), brightness: max(0.22, b * 0.75), alpha: 1)
+        }
+
+        static func faceImage(color: NSColor, code: String, name: String, count: String, compact: Bool) -> CGImage {
+            let w = 1024
+            let h = 1024
+            let rep = NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h,
+                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+            )!
+            let base = raster(liquidImage(color: color, letters: false, code: "", name: "", count: "", compact: compact))
+            let letters = letterPixels(color: color, code: code, name: name, count: count, compact: compact)
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+            NSImage(cgImage: base, size: NSSize(width: w, height: h)).draw(in: NSRect(x: 0, y: 0, width: w, height: h))
+            NSImage(cgImage: letters, size: NSSize(width: w, height: h)).draw(in: NSRect(x: 0, y: 0, width: w, height: h))
+            NSGraphicsContext.restoreGraphicsState()
+            return rep.cgImage!
+        }
+
+        static func letterDecal(color: NSColor, code: String, name: String, count: String, compact: Bool) -> SCNMaterial {
+            let mat = SCNMaterial()
+            mat.lightingModel = .constant
+            mat.diffuse.contents = letterPixels(color: color, code: code, name: name, count: count, compact: compact)
+            mat.transparent.contents = mat.diffuse.contents
+            mat.transparencyMode = .aOne
+            mat.blendMode = .alpha
+            mat.writesToDepthBuffer = false
+            mat.isDoubleSided = true
+            mat.locksAmbientWithDiffuse = false
+            mat.multiply.contents = NSColor.white
+            mat.ambient.contents = NSColor.black
+            mat.emission.contents = NSColor.black
+            mat.shaderModifiers = nil
+            return mat
+        }
+
+        static func letterPixels(color: NSColor, code: String, name: String, count: String, compact: Bool) -> CGImage {
+            let size = NSSize(width: 1024, height: 1024)
+            let drawn = NSImage(size: size, flipped: true) { rect in
+                NSColor.clear.setFill()
+                rect.fill()
+                let paragraph = NSMutableParagraphStyle()
+                paragraph.alignment = .center
+                let black = NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
+                let font = NSFont(name: "MarkerFelt-Wide", size: compact ? 460 : 400)
+                    ?? NSFont.systemFont(ofSize: compact ? 460 : 400, weight: .bold)
+                (code as NSString).draw(
+                    in: NSRect(x: 40, y: compact ? 280 : 200, width: 944, height: 460),
+                    withAttributes: [.font: font, .foregroundColor: black, .paragraphStyle: paragraph, .kern: 6]
+                )
+                if !compact {
+                    (name as NSString).draw(
+                        in: NSRect(x: 48, y: 640, width: 928, height: 120),
+                        withAttributes: [.font: NSFont.systemFont(ofSize: 62, weight: .semibold), .foregroundColor: black, .paragraphStyle: paragraph]
+                    )
+                    (count as NSString).draw(
+                        in: NSRect(x: 48, y: 770, width: 928, height: 100),
+                        withAttributes: [.font: NSFont.systemFont(ofSize: 46, weight: .medium), .foregroundColor: black, .paragraphStyle: paragraph]
+                    )
+                }
+                return true
+            }
+            let rep = NSBitmapImageRep(cgImage: raster(drawn))!
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            let src = color.usingColorSpace(.sRGB) ?? color.usingColorSpace(.deviceRGB) ?? color
+            if !src.getRed(&r, green: &g, blue: &b, alpha: &a) {
+                r = 1; g = 1; b = 1
+            }
+            let ink = NSColor(srgbRed: 1 - r, green: 1 - g, blue: 1 - b, alpha: 1)
+            let clear = NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0)
+            for y in 0..<rep.pixelsHigh {
+                for x in 0..<rep.pixelsWide {
+                    let pix = rep.colorAt(x: x, y: y)
+                    if let pix, pix.alphaComponent > 0.2 {
+                        rep.setColor(ink, atX: x, y: y)
+                    } else {
+                        rep.setColor(clear, atX: x, y: y)
+                    }
+                }
+            }
+            return rep.cgImage!
         }
 
         static func complementaryInk(_ color: NSColor) -> NSColor {
