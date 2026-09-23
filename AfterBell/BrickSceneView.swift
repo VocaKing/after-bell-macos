@@ -37,6 +37,8 @@ struct BrickSceneView: NSViewRepresentable {
     var count: String
     var hovered: Bool
     var pointer: CGPoint? = nil
+    var clickToken: Int = 0
+    var clickAt: CGPoint? = nil
     var selected: Bool
     var compact: Bool = false
 
@@ -80,12 +82,19 @@ struct BrickSceneView: NSViewRepresentable {
         } else {
             context.coordinator.trackingHover = false
         }
+        if clickToken != context.coordinator.lastClick {
+            context.coordinator.lastClick = clickToken
+            if clickToken > 0, let clickAt {
+                context.coordinator.poke(at: clickAt)
+            }
+        }
     }
 
     final class Coordinator: NSObject, SCNSceneRendererDelegate {
         weak var view: SCNView?
         var bodyNode = SCNNode()
         var coreNode = SCNNode()
+        var labelNode = SCNNode()
         var mesh = JellyMesh(half: 0.64, radius: 0.30, segs: 18)
         var faceMat = SCNMaterial()
         var shellMat = SCNMaterial()
@@ -101,6 +110,7 @@ struct BrickSceneView: NSViewRepresentable {
         var clickAmp: Float = 0
         var clickAge: Float = 0
         var clickPoint = SIMD3<Float>(0, 0.2, 0.55)
+        var lastClick = 0
         var lastTime: TimeInterval = 0
         var rope = SIMD3<Float>(0, 0, 0.55)
         var ropeTarget = SIMD3<Float>(0, 0, 0.55)
@@ -148,6 +158,12 @@ struct BrickSceneView: NSViewRepresentable {
             coreNode.renderingOrder = 10
             scene.rootNode.addChildNode(coreNode)
             scene.rootNode.addChildNode(bodyNode)
+            labelNode = SCNNode()
+            labelNode.name = "label"
+            labelNode.renderingOrder = 80
+            labelNode.categoryBitMask = 0
+            labelNode.position = SCNVector3(0, 0.02, 0.78)
+            scene.rootNode.addChildNode(labelNode)
 
             let shadow = SCNPlane(width: 1.7, height: 1.45)
             let sm = SCNMaterial()
@@ -187,7 +203,22 @@ struct BrickSceneView: NSViewRepresentable {
             face.shaderModifiers = nil
             faceMat = face
             coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.40)
+            let (cr, cg, cb) = Self.complement(from: fillHex)
+            let ink = NSColor(srgbRed: cr, green: cg, blue: cb, alpha: 1)
+            labelNode.childNodes.forEach { $0.removeFromParentNode() }
+            let codeNode = Self.textNode(code, width: compact ? 0.62 : 0.78, color: ink)
+            codeNode.position.y += compact ? 0 : 0.08
+            labelNode.addChildNode(codeNode)
+            if !compact {
+                let nameNode = Self.textNode(name, width: 0.7, color: ink)
+                nameNode.position.y -= 0.28
+                labelNode.addChildNode(nameNode)
+                let countNode = Self.textNode(count, width: 0.48, color: ink)
+                countNode.position.y -= 0.46
+                labelNode.addChildNode(countNode)
+            }
             upload(forceMaterials: true)
+            placeLabel()
         }
 
         func aim(at point: CGPoint) {
@@ -205,6 +236,19 @@ struct BrickSceneView: NSViewRepresentable {
             wake()
         }
 
+        func poke(at point: CGPoint) {
+            guard let view else { return }
+            let width = max(view.bounds.width, 1)
+            let height = max(view.bounds.height, 1)
+            let nx = Float((point.x / width) * 2 - 1)
+            let ny = Float((1 - point.y / height) * 2 - 1)
+            beginRipple(SIMD3(
+                max(-0.5, min(0.5, nx * 0.55)),
+                max(-0.45, min(0.45, ny * 0.48)),
+                0.6
+            ))
+        }
+
         func beginRipple(_ point: SIMD3<Float>) {
             clickPoint = point
             clickAmp = 1
@@ -213,9 +257,22 @@ struct BrickSceneView: NSViewRepresentable {
             for i in 0..<n {
                 let d = simd_length(mesh.rest[i] - point)
                 let w = exp(-d * d * 14)
-                mesh.vel[i] += mesh.normal[i] * w * 3.2
+                mesh.vel[i] += mesh.normal[i] * w * 4.5
             }
             wake()
+        }
+
+        func placeLabel() {
+            var best = Float(0.72)
+            var bestD = Float(9)
+            for p in mesh.pos {
+                let d = p.x * p.x + (p.y - 0.02) * (p.y - 0.02)
+                if d < bestD {
+                    bestD = d
+                    best = p.z
+                }
+            }
+            labelNode.position = SCNVector3(0, 0.02, best + 0.05)
         }
 
         func wake() {
@@ -256,6 +313,7 @@ struct BrickSceneView: NSViewRepresentable {
                 mesh.step(h: h, env: env, hoverTime: hoverTime, rope: rope, click: clickPoint, clickAmp: clickAmp, clickAge: clickAge)
             }
             mesh.recomputeNormals()
+            placeLabel()
             upload(forceMaterials: false)
         }
 
@@ -356,6 +414,31 @@ struct BrickSceneView: NSViewRepresentable {
             }
             NSGraphicsContext.restoreGraphicsState()
             return rep.cgImage!
+        }
+
+        static func textNode(_ string: String, width: CGFloat, color: NSColor) -> SCNNode {
+            let geo = SCNText(string: string, extrusionDepth: 0.2)
+            geo.font = NSFont(name: "MarkerFelt-Wide", size: 12) ?? NSFont.systemFont(ofSize: 12, weight: .bold)
+            geo.flatness = 0.2
+            geo.alignmentMode = CATextLayerAlignmentMode.center.rawValue
+            let mat = SCNMaterial()
+            mat.lightingModel = .constant
+            mat.diffuse.contents = color
+            mat.isDoubleSided = true
+            geo.materials = [mat]
+            let node = SCNNode(geometry: geo)
+            let (mn, mx) = node.boundingBox
+            let w = CGFloat(mx.x - mn.x)
+            let h = CGFloat(mx.y - mn.y)
+            guard w > 0.01, h > 0.01 else { return node }
+            let scale = width / w
+            node.scale = SCNVector3(Float(scale), Float(scale), 0.015)
+            node.position = SCNVector3(
+                -Float(mn.x + mx.x) * Float(scale) * 0.5,
+                -Float(mn.y + mx.y) * Float(scale) * 0.5,
+                0
+            )
+            return node
         }
 
         static func complement(from hex: String) -> (CGFloat, CGFloat, CGFloat) {
@@ -677,13 +760,14 @@ struct JellyMesh {
             let lagged = max(0, hoverTime - ropeDist * 0.38)
             let arrive = 1 - exp(-lagged * 14)
             let sway = sin(lagged * 13) * exp(-lagged * 1.8)
-            let center = exp(-(dx * dx + dy * dy) * 3.2)
-            let pull = env * arrive * (0.02 + 0.62 * center) + env * sway * 0.04 * center
-            var t = r
-            t.z += pull
+            let center = exp(-(dx * dx + dy * dy) * 4.2)
+            let pull = env * arrive * 0.42 * center + env * sway * 0.025 * center
+            let cam = SIMD3<Float>(-0.1, 0.55, 3.1)
+            let toward = simd_normalize(cam - r)
+            var t = r + toward * pull
             let cd = simd_length(r - click)
             let ripple = sin(cd * 16 - clickAge * 17) * exp(-cd * 2.5) * exp(-clickAge * 1.55)
-            t += normal[i] * ripple * clickAmp * 0.22
+            t += normal[i] * ripple * clickAmp * 0.38
             target[i] = t
         }
         for i in 0..<n {
