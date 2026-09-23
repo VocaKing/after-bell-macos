@@ -57,12 +57,6 @@ struct BrickSceneView: NSViewRepresentable {
         view.isPlaying = false
         view.rendersContinuously = false
         view.preferredFramesPerSecond = 60
-        view.addTrackingArea(NSTrackingArea(
-            rect: .zero,
-            options: [.mouseEnteredAndExited, .mouseMoved, .activeInKeyWindow, .inVisibleRect],
-            owner: context.coordinator,
-            userInfo: nil
-        ))
         context.coordinator.view = view
         context.coordinator.build(compact: compact)
         context.coordinator.apply(
@@ -81,7 +75,11 @@ struct BrickSceneView: NSViewRepresentable {
             color: color, code: code, name: name, count: count, fillHex: fillHex,
             hovered: hovered, selected: selected, compact: compact
         )
-        if let pointer { context.coordinator.aim(at: pointer) }
+        if let pointer {
+            context.coordinator.aim(at: pointer)
+        } else {
+            context.coordinator.trackingHover = false
+        }
     }
 
     final class Coordinator: NSObject, SCNSceneRendererDelegate {
@@ -198,25 +196,11 @@ struct BrickSceneView: NSViewRepresentable {
             let height = max(view.bounds.height, 1)
             let nx = Float((point.x / width) * 2 - 1)
             let ny = Float((1 - point.y / height) * 2 - 1)
-            ropeTarget = SIMD3(nx * 0.5, ny * 0.42, 0.55)
-            let appKit = NSPoint(x: point.x, y: height - point.y)
-            let hits = view.hitTest(appKit, options: [
-                SCNHitTestOption.searchMode: SCNHitTestSearchMode.closest.rawValue,
-                SCNHitTestOption.boundingBoxOnly: false,
-            ])
-            if let hit = hits.first(where: { node in
-                var n: SCNNode? = node.node
-                while let cur = n {
-                    if cur.name == "body" || cur.name == "core" { return true }
-                    n = cur.parent
-                }
-                return false
-            }) {
-                let local = hit.node.name == "body"
-                    ? hit.localCoordinates
-                    : hit.node.convertPosition(hit.localCoordinates, to: hit.node.parent)
-                ropeTarget = SIMD3(Float(local.x), Float(local.y), 0.55)
-            }
+            ropeTarget = SIMD3(
+                max(-0.55, min(0.55, nx * 0.62)),
+                max(-0.48, min(0.48, ny * 0.52)),
+                0.55
+            )
             trackingHover = true
             wake()
         }
@@ -232,46 +216,6 @@ struct BrickSceneView: NSViewRepresentable {
                 mesh.vel[i] += mesh.normal[i] * w * 3.2
             }
             wake()
-        }
-
-        @objc func mouseMoved(with event: NSEvent) {
-            guard let view else { return }
-            let point = view.convert(event.locationInWindow, from: nil)
-            let hits = view.hitTest(point, options: [
-                SCNHitTestOption.searchMode: SCNHitTestSearchMode.closest.rawValue,
-                SCNHitTestOption.boundingBoxOnly: false,
-            ])
-            if let hit = hits.first(where: { node in
-                var n: SCNNode? = node.node
-                while let cur = n {
-                    if cur.name == "body" || cur.name == "core" { return true }
-                    n = cur.parent
-                }
-                return false
-            }) {
-                let local = hit.node.name == "body"
-                    ? hit.localCoordinates
-                    : hit.node.convertPosition(hit.localCoordinates, to: hit.node.parent)
-                ropeTarget = SIMD3(Float(local.x), Float(local.y), Float(local.z))
-            }
-            trackingHover = true
-            wake()
-        }
-
-        @objc func mouseEntered(with event: NSEvent) {
-            hoverWork?.cancel()
-            trackingHover = true
-            wake()
-        }
-
-        @objc func mouseExited(with event: NSEvent) {
-            hoverWork?.cancel()
-            let work = DispatchWorkItem { [weak self] in
-                self?.trackingHover = false
-                self?.wake()
-            }
-            hoverWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: work)
         }
 
         func wake() {
@@ -394,34 +338,23 @@ struct BrickSceneView: NSViewRepresentable {
             NSImage(cgImage: base, size: NSSize(width: w, height: h)).draw(in: NSRect(x: 0, y: 0, width: w, height: h))
             let paragraph = NSMutableParagraphStyle()
             paragraph.alignment = .center
-            let black = NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
             let font = NSFont(name: "MarkerFelt-Wide", size: compact ? 460 : 400)
                 ?? NSFont.systemFont(ofSize: compact ? 460 : 400, weight: .bold)
             (code as NSString).draw(
                 in: NSRect(x: 40, y: compact ? 280 : 200, width: 944, height: 460),
-                withAttributes: [.font: font, .foregroundColor: black, .paragraphStyle: paragraph, .kern: 6]
+                withAttributes: [.font: font, .foregroundColor: ink, .paragraphStyle: paragraph, .kern: 6]
             )
             if !compact {
                 (name as NSString).draw(
                     in: NSRect(x: 48, y: 640, width: 928, height: 120),
-                    withAttributes: [.font: NSFont.systemFont(ofSize: 62, weight: .semibold), .foregroundColor: black, .paragraphStyle: paragraph]
+                    withAttributes: [.font: NSFont.systemFont(ofSize: 62, weight: .semibold), .foregroundColor: ink, .paragraphStyle: paragraph]
                 )
                 (count as NSString).draw(
                     in: NSRect(x: 48, y: 770, width: 928, height: 100),
-                    withAttributes: [.font: NSFont.systemFont(ofSize: 46, weight: .medium), .foregroundColor: black, .paragraphStyle: paragraph]
+                    withAttributes: [.font: NSFont.systemFont(ofSize: 46, weight: .medium), .foregroundColor: ink, .paragraphStyle: paragraph]
                 )
             }
             NSGraphicsContext.restoreGraphicsState()
-            for y in 0..<h {
-                for x in 0..<w {
-                    guard let pix = rep.colorAt(x: x, y: y) else { continue }
-                    var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-                    pix.getRed(&r, green: &g, blue: &b, alpha: &a)
-                    if r + g + b < 0.45 {
-                        rep.setColor(ink, atX: x, y: y)
-                    }
-                }
-            }
             return rep.cgImage!
         }
 
@@ -744,14 +677,10 @@ struct JellyMesh {
             let lagged = max(0, hoverTime - ropeDist * 0.38)
             let arrive = 1 - exp(-lagged * 14)
             let sway = sin(lagged * 13) * exp(-lagged * 1.8)
-            let center = exp(-(dx * dx + dy * dy) * 8)
-            var pull = env * arrive * (0.05 + 0.42 * center)
-            pull += env * sway * 0.05 * (0.3 + 0.7 * center)
+            let center = exp(-(dx * dx + dy * dy) * 3.2)
+            let pull = env * arrive * (0.02 + 0.62 * center) + env * sway * 0.04 * center
             var t = r
             t.z += pull
-            let pinch = pull * 0.9
-            t.x *= 1 - pinch * (0.25 + 0.75 * center)
-            t.y *= 1 - pinch * (0.25 + 0.75 * center)
             let cd = simd_length(r - click)
             let ripple = sin(cd * 16 - clickAge * 17) * exp(-cd * 2.5) * exp(-clickAge * 1.55)
             t += normal[i] * ripple * clickAmp * 0.22
