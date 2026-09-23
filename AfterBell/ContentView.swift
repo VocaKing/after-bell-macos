@@ -93,7 +93,7 @@ struct Sidebar: View {
                     .background { GlassSurface(tint: AfterBellTheme.accent, radius: 10) }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("After Bell").font(.system(size: 22, weight: .regular, design: .serif))
-                    Text("Homework, remembered").font(.system(size: 11)).foregroundStyle(AfterBellTheme.muted)
+                    Text("Homework, remembered").font(.system(size: 11)).foregroundStyle(AfterBellTheme.onGlassSoft)
                 }
             }
             .padding(.top, 8)
@@ -117,7 +117,7 @@ struct Sidebar: View {
                 }
                 if store.roomImage != nil {
                     Button("Restore default room") { store.resetRoom() }
-                        .buttonStyle(.plain).foregroundStyle(AfterBellTheme.muted).frame(maxWidth: .infinity)
+                        .buttonStyle(.plain).foregroundStyle(AfterBellTheme.onGlassSoft).frame(maxWidth: .infinity)
                         .onHover { inside in
                             if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
                         }
@@ -143,12 +143,12 @@ struct WeekRing: View {
                     .rotationEffect(.degrees(-90))
                 VStack(spacing: 0) {
                     Text("\(remaining)").font(.system(size: 28, weight: .medium, design: .serif))
-                    Text("left this week").font(.system(size: 10)).foregroundStyle(AfterBellTheme.muted)
+                    Text("left this week").font(.system(size: 10)).foregroundStyle(AfterBellTheme.onGlassSoft)
                 }
             }
             .frame(width: 132, height: 132)
             .frame(maxWidth: .infinity)
-            Text("\(finished) finished").font(.system(size: 11)).foregroundStyle(AfterBellTheme.muted).frame(maxWidth: .infinity)
+            Text("\(finished) finished").font(.system(size: 11)).foregroundStyle(AfterBellTheme.onGlassSoft).frame(maxWidth: .infinity)
         }
         .padding(.top, 12)
     }
@@ -166,13 +166,13 @@ struct MainDesk: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("\(greeting(for: hour)).").font(.system(size: 14)).foregroundStyle(AfterBellTheme.muted)
+                    Text("\(greeting(for: hour)).").font(.system(size: 14)).foregroundStyle(AfterBellTheme.onGlassSoft)
                     Text(store.headline()).font(.system(size: 34, weight: .regular, design: .serif))
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Subject links").font(.system(size: 11, weight: .medium)).foregroundStyle(AfterBellTheme.muted).textCase(.uppercase)
+                    Text("Subject links").font(.system(size: 11, weight: .medium)).foregroundStyle(AfterBellTheme.onGlass).textCase(.uppercase)
                     Text("Hover pulls the jelly out toward you, following the cursor. Click sends a wave from that spot.")
-                        .font(.system(size: 13)).foregroundStyle(AfterBellTheme.muted)
+                        .font(.system(size: 13)).foregroundStyle(AfterBellTheme.onGlassSoft)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 188, maximum: 280), spacing: 12)], spacing: 10) {
                         ForEach(store.sortedSubjects) { subject in
                             let open = store.openCount(for: subject)
@@ -222,7 +222,7 @@ struct MainDesk: View {
                                 Text("Add subject")
                                     .font(.system(size: 13, weight: .medium))
                             }
-                            .foregroundStyle(AfterBellTheme.muted)
+                            .foregroundStyle(AfterBellTheme.onGlass)
                             .frame(maxWidth: .infinity)
                             .frame(height: store.sortedSubjects.count > 8 ? 168 : 210)
                             .background { GlassSurface(radius: 22) }
@@ -239,7 +239,7 @@ struct MainDesk: View {
                             ? (store.query.isEmpty && store.selectedSubjectId == nil ? "Open work" : "Matches")
                             : "Due \(formatShortDate(store.selectedDay!))"
                     )
-                        .font(.system(size: 11, weight: .medium)).foregroundStyle(AfterBellTheme.muted).textCase(.uppercase)
+                        .font(.system(size: 11, weight: .medium)).foregroundStyle(AfterBellTheme.onGlass).textCase(.uppercase)
                     Spacer()
                     if let id = store.selectedSubjectId, let subject = store.subjects.first(where: { $0.id == id }) {
                         Button { store.selectedSubjectId = nil } label: {
@@ -251,7 +251,7 @@ struct MainDesk: View {
                             .background { GlassSurface(tint: AfterBellTheme.accent, capsule: true) }
                         }.buttonStyle(.plain)
                     }
-                    Text("\(store.visible.count)").font(.system(size: 11, design: .monospaced)).foregroundStyle(AfterBellTheme.muted)
+                    Text("\(store.visible.count)").font(.system(size: 11, design: .monospaced)).foregroundStyle(AfterBellTheme.onGlass)
                 }
                 if store.visible.isEmpty {
                     VStack(spacing: 10) {
@@ -262,7 +262,7 @@ struct MainDesk: View {
                                 ? "Finished work is filed under its due date. Pick a day on the strip to see it."
                                 : "No homework is stored under \(formatShortDate(store.selectedDay ?? ""))."
                         )
-                            .foregroundStyle(AfterBellTheme.muted).multilineTextAlignment(.center)
+                            .foregroundStyle(AfterBellTheme.onGlassSoft).multilineTextAlignment(.center)
                         Button { store.form = .add } label: { Label("Add homework", systemImage: "plus") }
                             .buttonStyle(GlassActionStyle(prominent: true))
                             .focusEffectDisabled()
@@ -288,7 +288,9 @@ struct InquiryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             TextField("Ask what is due, overdue, or already finished", text: Binding(get: { store.query }, set: { store.query = $0 }))
-                .textFieldStyle(.plain).padding(.horizontal, 16).frame(height: 44)
+                .textFieldStyle(.plain)
+                .foregroundStyle(AfterBellTheme.onGlass)
+                .padding(.horizontal, 16).frame(height: 44)
                 .background { GlassSurface(tint: Color.white.opacity(searchHovered ? 0.8 : 0.5), capsule: true) }
                 .scaleEffect(searchHovered ? 1.015 : 1)
                 .shadow(color: Color.white.opacity(searchHovered ? 0.22 : 0.04), radius: searchHovered ? 12 : 3, y: searchHovered ? 4 : 1)
@@ -297,7 +299,7 @@ struct InquiryRow: View {
                     HoverCursor.set(inside)
                 }
                 .animation(.easeOut(duration: 0.16), value: searchHovered)
-            Text(store.summary()).font(.system(size: 13)).foregroundStyle(AfterBellTheme.muted)
+            Text(store.summary()).font(.system(size: 13)).foregroundStyle(AfterBellTheme.onGlass)
             HStack(spacing: 8) {
                 ForEach(["Due today", "Overdue", "Finished"], id: \.self) { chip in
                     HoverChip(
@@ -340,11 +342,12 @@ struct WeekStripView: View {
                     Image(systemName: "chevron.left")
                 }
                 .buttonStyle(.plain)
+                .foregroundStyle(AfterBellTheme.onGlass)
                 .focusEffectDisabled()
                 Spacer()
                 Text(formatWeekRange(store.weekCursor))
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(AfterBellTheme.muted)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AfterBellTheme.onGlass)
                 if startOfWeek(store.weekCursor) != startOfWeek(store.today) {
                     Button("This week") { store.jumpToThisWeek() }
                         .buttonStyle(.plain)
@@ -357,6 +360,7 @@ struct WeekStripView: View {
                     Image(systemName: "chevron.right")
                 }
                 .buttonStyle(.plain)
+                .foregroundStyle(AfterBellTheme.onGlass)
                 .focusEffectDisabled()
             }
             .padding(.horizontal, 8)
@@ -390,12 +394,12 @@ struct WeekDayCell: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Text(weekdayLetter(day)).font(.system(size: 11, weight: .medium)).foregroundStyle(AfterBellTheme.muted)
+                Text(weekdayLetter(day)).font(.system(size: 12, weight: .semibold)).foregroundStyle(AfterBellTheme.onGlass)
                 Text("\(Int(day.suffix(2)) ?? 0)")
                     .font(.system(size: 16, weight: isToday ? .semibold : .regular))
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(isToday ? AfterBellTheme.accent : (hovered ? Color.white.opacity(0.14) : .clear)))
-                    .foregroundStyle(isToday ? AfterBellTheme.accentFg : AfterBellTheme.fg)
+                    .foregroundStyle(isToday ? AfterBellTheme.accentFg : AfterBellTheme.onGlass)
                 Circle().fill(
                     AfterBellTheme.fg.opacity(hasWork ? 0.55 : (hasDone ? 0.28 : 0.12))
                 ).frame(width: 4, height: 4)
@@ -425,7 +429,7 @@ struct AssignmentRow: View {
             Button { store.toggle(item.id) } label: {
                 Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 20))
-                    .foregroundStyle(item.isDone ? AfterBellTheme.muted : AfterBellTheme.fg)
+                    .foregroundStyle(item.isDone ? AfterBellTheme.onGlassSoft : AfterBellTheme.onGlass)
             }.buttonStyle(.plain)
             HomeworkGlyph(
                 code: subject?.code ?? "-",
@@ -433,12 +437,12 @@ struct AssignmentRow: View {
                 hovered: hovered
             )
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.title).font(.system(size: 15, weight: .semibold)).strikethrough(item.isDone)
+                Text(item.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(AfterBellTheme.onGlass).strikethrough(item.isDone)
                 HStack(spacing: 6) {
                     Text(subject?.name ?? "")
                     Text("·")
                     Text(formatDue(item.dueOn, today: store.today))
-                        .foregroundStyle(diffDays(item.dueOn, from: store.today) < 0 && !item.isDone ? AfterBellTheme.danger : AfterBellTheme.muted)
+                        .foregroundStyle(diffDays(item.dueOn, from: store.today) < 0 && !item.isDone ? AfterBellTheme.danger : AfterBellTheme.onGlassSoft)
                     if item.isDone, let done = item.completedAt {
                         Text("·")
                         if item.isLate {
@@ -454,7 +458,7 @@ struct AssignmentRow: View {
                         Text("·")
                         Text("Urgent").foregroundStyle(AfterBellTheme.warn)
                     }
-                }.font(.system(size: 12)).foregroundStyle(AfterBellTheme.muted)
+                }.font(.system(size: 12)).foregroundStyle(AfterBellTheme.onGlassSoft)
                 if !item.notes.isEmpty {
                     Text(item.notes).font(.system(size: 13)).foregroundStyle(AfterBellTheme.fg.opacity(0.8))
                 }
@@ -483,7 +487,7 @@ struct HoverIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .foregroundStyle(hovered ? AfterBellTheme.fg : AfterBellTheme.muted)
+                .foregroundStyle(hovered ? AfterBellTheme.onGlass : AfterBellTheme.onGlassSoft)
                 .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
