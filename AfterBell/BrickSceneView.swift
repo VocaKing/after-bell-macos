@@ -149,7 +149,10 @@ struct BrickSceneView: NSViewRepresentable {
             light(.directional, intensity: 36, color: NSColor(calibratedWhite: 0.72, alpha: 1), at: .init(-0.2, 0.35, 3.2), look: true, scale: 1)
             light(.directional, intensity: 18, color: NSColor(calibratedWhite: 0.55, alpha: 1), at: .init(1.8, 0.6, -1.2), look: true, scale: 1)
 
-            mesh = JellyMesh(half: compact ? 0.52 : 0.64, radius: compact ? 0.24 : 0.30, segs: compact ? 28 : 42)
+            mesh = JellyMesh(half: compact ? 0.52 : 0.64, radius: compact ? 0.24 : 0.30, segs: compact ? 16 : 24)
+            bodyElements = []
+            bodyUV = nil
+            coreReady = false
             bodyNode = SCNNode()
             bodyNode.name = "body"
             bodyNode.renderingOrder = 20
@@ -271,16 +274,28 @@ struct BrickSceneView: NSViewRepresentable {
                 return
             }
 
-            let h = dt / 4
-            for _ in 0..<4 {
+            let h = dt / 2
+            for _ in 0..<2 {
                 mesh.step(h: h, env: env, hoverTime: hoverTime, rope: rope, click: clickPoint, clickAmp: clickAmp, clickAge: clickAge)
             }
             mesh.recomputeNormals()
             upload(forceMaterials: false)
         }
 
+        var bodyElements: [SCNGeometryElement] = []
+        var bodyUV: SCNGeometrySource?
+        var coreReady = false
+
         func upload(forceMaterials: Bool) {
-            let body = mesh.makeGeometry()
+            if bodyElements.isEmpty {
+                bodyElements = [
+                    SCNGeometryElement(indices: mesh.front, primitiveType: .triangles),
+                    SCNGeometryElement(indices: mesh.shell, primitiveType: .triangles),
+                ]
+                bodyUV = SCNGeometrySource(textureCoordinates: mesh.uv)
+            }
+            let (verts, norms) = mesh.surfaceSources(positions: mesh.pos)
+            let body = SCNGeometry(sources: [verts, norms, bodyUV!], elements: bodyElements)
             if forceMaterials || bodyNode.geometry?.materials.count != 2 {
                 body.materials = [faceMat, shellMat]
             } else if let existing = bodyNode.geometry?.materials, existing.count == 2 {
@@ -290,9 +305,12 @@ struct BrickSceneView: NSViewRepresentable {
             }
             bodyNode.geometry = body
 
-            let core = mesh.makeCoreGeometry(scale: 0.46)
-            core.materials = [coreMat, coreMat]
-            coreNode.geometry = core
+            if forceMaterials || !coreReady {
+                let core = mesh.makeCoreGeometry(scale: 0.46)
+                core.materials = [coreMat, coreMat]
+                coreNode.geometry = core
+                coreReady = true
+            }
         }
 
         static func gelatin(_ color: NSColor, transparency: CGFloat) -> SCNMaterial {
@@ -308,7 +326,7 @@ struct BrickSceneView: NSViewRepresentable {
             mat.clearCoatRoughness.contents = 0.7
             mat.fresnelExponent = 1.8
             mat.transparency = transparency
-            mat.transparencyMode = .dualLayer
+            mat.transparencyMode = .aOne
             mat.blendMode = .alpha
             mat.isDoubleSided = true
             mat.writesToDepthBuffer = false
@@ -826,6 +844,21 @@ struct JellyMesh {
             }
         }
         self.normal = normal
+    }
+
+    func surfaceSources(positions: [SIMD3<Float>]) -> (SCNGeometrySource, SCNGeometrySource) {
+        let normal = self.normal
+        var verts: [SCNVector3] = []
+        var norms: [SCNVector3] = []
+        verts.reserveCapacity(positions.count)
+        norms.reserveCapacity(positions.count)
+        for i in 0..<positions.count {
+            let p = positions[i]
+            let n = i < normal.count ? normal[i] : SIMD3<Float>(0, 0, 1)
+            verts.append(SCNVector3(p.x, p.y, p.z))
+            norms.append(SCNVector3(n.x, n.y, n.z))
+        }
+        return (SCNGeometrySource(vertices: verts), SCNGeometrySource(normals: norms))
     }
 
     func makeGeometry() -> SCNGeometry {
