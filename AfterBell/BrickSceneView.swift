@@ -195,20 +195,6 @@ struct BrickSceneView: NSViewRepresentable {
             face.readsFromDepthBuffer = true
             faceMat = face
             coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.40)
-            labelNode.childNodes.forEach { $0.removeFromParentNode() }
-            let ink = Self.complementaryInk(rgb)
-            let codeNode = Self.textNode(code, width: compact ? 0.62 : 0.72, color: ink)
-            codeNode.position.y += compact ? 0 : 0.1
-            labelNode.addChildNode(codeNode)
-            if !compact {
-                let nameNode = Self.textNode(name, width: 0.66, color: ink)
-                nameNode.position.y -= 0.2
-                labelNode.addChildNode(nameNode)
-                let countNode = Self.textNode(count, width: 0.42, color: ink)
-                countNode.position.y -= 0.36
-                labelNode.addChildNode(countNode)
-            }
-            placeLabel()
             upload(forceMaterials: true)
         }
 
@@ -294,7 +280,6 @@ struct BrickSceneView: NSViewRepresentable {
                 mesh.step(h: h, env: env, hoverTime: hoverTime, rope: rope, click: clickPoint, clickAmp: clickAmp, clickAge: clickAge)
             }
             mesh.recomputeNormals()
-            placeLabel()
             upload(forceMaterials: false)
         }
 
