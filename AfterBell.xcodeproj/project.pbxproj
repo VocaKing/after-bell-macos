@@ -17,7 +17,6 @@
 		A10000000000000000000108 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000208 /* Assets.xcassets */; };
 		A10000000000000000000109 /* SceneKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10000000000000000000209 /* SceneKit.framework */; };
 		A1000000000000000000010A /* Intro.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000020A /* Intro.mp4 */; };
-		A1000000000000000000010B /* IntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000020B /* IntroView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,7 +31,6 @@
 		A10000000000000000000208 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A10000000000000000000209 /* SceneKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SceneKit.framework; path = System/Library/Frameworks/SceneKit.framework; sourceTree = SDKROOT; };
 		A1000000000000000000020A /* Intro.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = Intro.mp4; sourceTree = "<group>"; };
-		A1000000000000000000020B /* IntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -66,7 +64,6 @@
 				A10000000000000000000204 /* HomeworkStore.swift */,
 				A10000000000000000000202 /* Models.swift */,
 				A10000000000000000000203 /* Theme.swift */,
-				A1000000000000000000020B /* IntroView.swift */,
 				A1000000000000000000020A /* Intro.mp4 */,
 				A10000000000000000000208 /* Assets.xcassets */,
 			);
@@ -166,7 +163,6 @@
 				A10000000000000000000105 /* BrickSceneView.swift in Sources */,
 				A10000000000000000000106 /* ContentView.swift in Sources */,
 				A10000000000000000000107 /* Sheets.swift in Sources */,
-				A1000000000000000000010B /* IntroView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

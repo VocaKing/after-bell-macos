@@ -774,7 +774,6 @@ struct JellyMesh {
         let n = rest.count
         var pos = self.pos
         var vel = self.vel
-        let normal = self.normal
         var target = rest
         for i in 0..<n {
             let r = rest[i]
