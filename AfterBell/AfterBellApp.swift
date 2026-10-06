@@ -3,11 +3,23 @@ import SwiftUI
 @main
 struct AfterBellApp: App {
     @State private var store = HomeworkStore()
+    @State private var showIntro = true
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(store)
+            ZStack {
+                ContentView()
+                    .environment(store)
+                if showIntro {
+                    IntroOverlay {
+                        withAnimation(.easeOut(duration: 0.35)) {
+                            showIntro = false
+                        }
+                    }
+                    .transition(.opacity)
+                    .zIndex(2)
+                }
+            }
                 .frame(minWidth: 1080, minHeight: 720)
                 .onAppear {
                     DispatchQueue.main.async {
