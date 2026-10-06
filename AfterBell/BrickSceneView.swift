@@ -149,7 +149,7 @@ struct BrickSceneView: NSViewRepresentable {
             light(.directional, intensity: 36, color: NSColor(calibratedWhite: 0.72, alpha: 1), at: .init(-0.2, 0.35, 3.2), look: true, scale: 1)
             light(.directional, intensity: 18, color: NSColor(calibratedWhite: 0.55, alpha: 1), at: .init(1.8, 0.6, -1.2), look: true, scale: 1)
 
-            mesh = JellyMesh(half: compact ? 0.52 : 0.64, radius: compact ? 0.24 : 0.30, segs: compact ? 14 : 20)
+            mesh = JellyMesh(half: compact ? 0.52 : 0.64, radius: compact ? 0.24 : 0.30, segs: compact ? 28 : 42)
             bodyNode = SCNNode()
             bodyNode.name = "body"
             bodyNode.renderingOrder = 20
@@ -158,10 +158,10 @@ struct BrickSceneView: NSViewRepresentable {
             coreNode.renderingOrder = 10
             scene.rootNode.addChildNode(coreNode)
             scene.rootNode.addChildNode(bodyNode)
-            let plate = SCNPlane(width: 1.12, height: 1.12)
-            labelNode = SCNNode(geometry: plate)
-            labelNode.position = SCNVector3(0, 0.02, 1.02)
-            labelNode.renderingOrder = 300
+            labelNode = SCNNode()
+            labelNode.name = "letters"
+            labelNode.renderingOrder = 400
+            labelNode.position = SCNVector3(0, 0.02, 0.9)
             scene.rootNode.addChildNode(labelNode)
 
             let shadow = SCNPlane(width: 1.7, height: 1.45)
@@ -186,34 +186,29 @@ struct BrickSceneView: NSViewRepresentable {
             guard key != lastKey else { return }
             lastKey = key
             shellMat = Self.gelatin(rgb, transparency: 0.64)
-            shellMat.diffuse.contents = Self.raster(Self.liquidImage(color: rgb, letters: false, code: "", name: "", count: "", compact: compact))
-            let image = Self.faceImage(color: rgb, hex: fillHex, code: code, name: name, count: count, compact: compact)
+            shellMat.diffuse.contents = Self.liquidImage(color: rgb, letters: false, code: "", name: "", count: "", compact: compact)
             let face = SCNMaterial()
             face.lightingModel = .constant
-            face.diffuse.contents = image
-            face.multiply.contents = NSColor.white
-            face.ambient.contents = NSColor.black
-            face.emission.contents = NSColor.black
-            face.locksAmbientWithDiffuse = false
-            face.transparency = 0
-            face.transparencyMode = .default
+            face.diffuse.contents = Self.liquidImage(color: rgb, letters: true, code: code, name: name, count: count, compact: compact)
             face.isDoubleSided = true
             face.writesToDepthBuffer = true
-            face.shaderModifiers = nil
+            face.readsFromDepthBuffer = true
             faceMat = face
             coreMat = Self.gelatin(Self.richer(rgb), transparency: 0.40)
-            let card = SCNMaterial()
-            card.lightingModel = .constant
-            card.diffuse.contents = Self.raster(Self.labelCard(hex: fillHex, code: code, name: name, count: count, compact: compact))
-            card.multiply.contents = NSColor.white
-            card.ambient.contents = NSColor.black
-            card.emission.contents = NSColor.black
-            card.locksAmbientWithDiffuse = false
-            card.isDoubleSided = true
-            card.readsFromDepthBuffer = false
-            card.writesToDepthBuffer = false
-            card.transparency = 0
-            labelNode.geometry?.materials = [card]
+            labelNode.childNodes.forEach { $0.removeFromParentNode() }
+            let ink = Self.complementaryInk(rgb)
+            let codeNode = Self.textNode(code, width: compact ? 0.62 : 0.72, color: ink)
+            codeNode.position.y += compact ? 0 : 0.1
+            labelNode.addChildNode(codeNode)
+            if !compact {
+                let nameNode = Self.textNode(name, width: 0.66, color: ink)
+                nameNode.position.y -= 0.2
+                labelNode.addChildNode(nameNode)
+                let countNode = Self.textNode(count, width: 0.42, color: ink)
+                countNode.position.y -= 0.36
+                labelNode.addChildNode(countNode)
+            }
+            placeLabel()
             upload(forceMaterials: true)
         }
 
@@ -250,6 +245,15 @@ struct BrickSceneView: NSViewRepresentable {
             clickAmp = 1
             clickAge = 0
             wake()
+        }
+
+        func placeLabel() {
+            var z: Float = 0.72
+            for p in mesh.pos where p.z > 0.2 && (p.x * p.x + p.y * p.y) < 0.12 {
+                z = max(z, p.z)
+            }
+            labelNode.eulerAngles = SCNVector3(0, 0, 0)
+            labelNode.position = SCNVector3(0, 0.02, z + 0.05)
         }
 
         func wake() {
@@ -290,6 +294,7 @@ struct BrickSceneView: NSViewRepresentable {
                 mesh.step(h: h, env: env, hoverTime: hoverTime, rope: rope, click: clickPoint, clickAmp: clickAmp, clickAge: clickAge)
             }
             mesh.recomputeNormals()
+            placeLabel()
             upload(forceMaterials: false)
         }
 
@@ -398,7 +403,7 @@ struct BrickSceneView: NSViewRepresentable {
         static func textNode(_ string: String, width: CGFloat, color: NSColor) -> SCNNode {
             let geo = SCNText(string: string, extrusionDepth: 0.2)
             geo.font = NSFont(name: "MarkerFelt-Wide", size: 12) ?? NSFont.systemFont(ofSize: 12, weight: .bold)
-            geo.flatness = 0.2
+            geo.flatness = 0.04
             geo.alignmentMode = CATextLayerAlignmentMode.center.rawValue
             let mat = SCNMaterial()
             mat.lightingModel = .constant
@@ -408,6 +413,7 @@ struct BrickSceneView: NSViewRepresentable {
             mat.writesToDepthBuffer = false
             geo.materials = [mat]
             let node = SCNNode(geometry: geo)
+            node.renderingOrder = 400
             let (mn, mx) = node.boundingBox
             let w = CGFloat(mx.x - mn.x)
             let h = CGFloat(mx.y - mn.y)
@@ -741,7 +747,7 @@ struct JellyMesh {
                     for dz in -1...1 {
                         let slot = (x + dx + 80) * 20000 + (y + dy + 80) * 200 + (z + dz + 80)
                         guard let list = buckets[slot] else { continue }
-                        for j in list where j > i && simd_length(rest[i] - rest[j]) < 0.012 {
+                        for j in list where j > i && simd_length(rest[i] - rest[j]) < 0.04 {
                             link(i, j)
                         }
                     }
@@ -779,8 +785,8 @@ struct JellyMesh {
             let lagged = max(0, hoverTime - ropeDist * 0.1)
             let arrive = 1 - exp(-lagged * 26)
             let sway = sin(lagged * 16) * exp(-lagged * 2.2)
-            let center = exp(-(dx * dx + dy * dy) * 3.4)
-            let pull = env * arrive * 0.82 * center + env * sway * 0.05 * center
+            let center = exp(-(dx * dx + dy * dy) * 2.1)
+            let pull = env * arrive * 0.7 * center + env * sway * 0.03 * center
             let cam = SIMD3<Float>(-0.1, 0.55, 3.1)
             let toward = simd_normalize(cam - r)
             var t = r + toward * pull
@@ -795,7 +801,7 @@ struct JellyMesh {
                 var avg = SIMD3<Float>(repeating: 0)
                 for j in neighbors[i] { avg += pos[j] - rest[j] }
                 avg /= Float(neighbors[i].count)
-                f += (avg - (pos[i] - rest[i])) * 38
+                f += (avg - (pos[i] - rest[i])) * 72
             }
             vel[i] += f * h
             pos[i] += vel[i] * h
