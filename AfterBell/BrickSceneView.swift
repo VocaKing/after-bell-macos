@@ -158,11 +158,7 @@ struct BrickSceneView: NSViewRepresentable {
             coreNode.renderingOrder = 10
             scene.rootNode.addChildNode(coreNode)
             scene.rootNode.addChildNode(bodyNode)
-            labelNode = SCNNode()
-            labelNode.name = "letters"
-            labelNode.renderingOrder = 400
-            labelNode.position = SCNVector3(0, 0.02, 0.9)
-            scene.rootNode.addChildNode(labelNode)
+            scene.rootNode.childNode(withName: "letters", recursively: true)?.removeFromParentNode()
 
             let shadow = SCNPlane(width: 1.7, height: 1.45)
             let sm = SCNMaterial()
@@ -190,7 +186,7 @@ struct BrickSceneView: NSViewRepresentable {
             let face = SCNMaterial()
             face.lightingModel = .constant
             face.diffuse.contents = Self.liquidImage(color: rgb, letters: true, code: code, name: name, count: count, compact: compact)
-            face.isDoubleSided = true
+            face.isDoubleSided = false
             face.writesToDepthBuffer = true
             face.readsFromDepthBuffer = true
             faceMat = face
@@ -261,7 +257,7 @@ struct BrickSceneView: NSViewRepresentable {
             let target: Float = hovering ? 1 : 0
             envVel += ((target - env) * 180 - envVel * 12) * dt
             env += envVel * dt
-            clickAmp *= exp(-1.15 * dt)
+            clickAmp *= exp(-0.75 * dt)
             clickAge += dt
 
             let moving = abs(env) > 0.01 || abs(envVel) > 0.01 || clickAmp > 0.02 || mesh.energy() > 0.0004
@@ -557,20 +553,20 @@ struct BrickSceneView: NSViewRepresentable {
                 let paragraph = NSMutableParagraphStyle()
                 paragraph.alignment = .center
                 let ink = complementaryInk(c)
-                let font = NSFont(name: "MarkerFelt-Wide", size: compact ? 460 : 400)
-                    ?? NSFont.systemFont(ofSize: compact ? 460 : 400, weight: .bold)
+                let font = NSFont(name: "MarkerFelt-Wide", size: compact ? 300 : 250)
+                    ?? NSFont.systemFont(ofSize: compact ? 300 : 250, weight: .bold)
                 (code as NSString).draw(
-                    in: NSRect(x: 40, y: compact ? 280 : 200, width: 944, height: 460),
-                    withAttributes: [.font: font, .foregroundColor: ink, .paragraphStyle: paragraph, .kern: 6]
+                    in: NSRect(x: 160, y: compact ? 340 : 300, width: 704, height: 340),
+                    withAttributes: [.font: font, .foregroundColor: ink, .paragraphStyle: paragraph, .kern: 4]
                 )
                 if !compact {
                     (name as NSString).draw(
-                        in: NSRect(x: 48, y: 640, width: 928, height: 120),
-                        withAttributes: [.font: NSFont.systemFont(ofSize: 62, weight: .semibold), .foregroundColor: ink, .paragraphStyle: paragraph]
+                        in: NSRect(x: 120, y: 660, width: 784, height: 90),
+                        withAttributes: [.font: NSFont.systemFont(ofSize: 48, weight: .semibold), .foregroundColor: ink, .paragraphStyle: paragraph]
                     )
                     (count as NSString).draw(
-                        in: NSRect(x: 48, y: 770, width: 928, height: 100),
-                        withAttributes: [.font: NSFont.systemFont(ofSize: 46, weight: .medium), .foregroundColor: ink.withAlphaComponent(0.82), .paragraphStyle: paragraph]
+                        in: NSRect(x: 120, y: 770, width: 784, height: 80),
+                        withAttributes: [.font: NSFont.systemFont(ofSize: 36, weight: .medium), .foregroundColor: ink.withAlphaComponent(0.9), .paragraphStyle: paragraph]
                     )
                 }
                 return true
@@ -776,8 +772,9 @@ struct JellyMesh {
             let toward = simd_normalize(cam - r)
             var t = r + toward * pull
             let cd = simd_length(SIMD2(r.x - click.x, r.y - click.y))
-            let ripple = sin(cd * 14 - clickAge * 16) * exp(-cd * 1.7) * exp(-clickAge * 1.15)
-            t += toward * max(0, ripple) * clickAmp * 0.48
+            let radius = clickAge * 2.4
+            let ring = exp(-(cd - radius) * (cd - radius) * 36) * exp(-clickAge * 0.65)
+            t += toward * ring * clickAmp * 0.9
             target[i] = t
         }
         for i in 0..<n {
@@ -786,7 +783,7 @@ struct JellyMesh {
                 var avg = SIMD3<Float>(repeating: 0)
                 for j in neighbors[i] { avg += pos[j] - rest[j] }
                 avg /= Float(neighbors[i].count)
-                f += (avg - (pos[i] - rest[i])) * 72
+                f += (avg - (pos[i] - rest[i])) * 26
             }
             vel[i] += f * h
             pos[i] += vel[i] * h
