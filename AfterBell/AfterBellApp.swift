@@ -42,13 +42,19 @@ struct AfterBellApp: App {
 }
 
 enum IntroClip {
+    static let byteCount = 5917809
+
     static func url() -> URL? {
-        if let bundled = Bundle.main.url(forResource: "Intro", withExtension: "mp4") {
+        if let bundled = Bundle.main.url(forResource: "Intro", withExtension: "mp4"),
+           let size = try? bundled.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+           size > 1_000_000 {
             return bundled
         }
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("AfterBellIntro.mp4")
-        if !FileManager.default.fileExists(atPath: file.path) {
-            guard let data = Data(base64Encoded: parts.joined(), options: .ignoreUnknownCharacters) else { return nil }
+        let existing = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? NSNumber)?.intValue ?? 0
+        if existing != byteCount {
+            guard let data = Data(base64Encoded: parts.joined(), options: .ignoreUnknownCharacters),
+                  data.count == byteCount else { return nil }
             do { try data.write(to: file, options: .atomic) } catch { return nil }
         }
         return file
@@ -721,63 +727,87 @@ struct IntroOverlay: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.black
             IntroPlayer(onFinished: onFinished)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
+        .background(Color.black)
         .contentShape(Rectangle())
         .onTapGesture { onFinished() }
     }
 }
 
-final class IntroHostView: AVPlayerView {
+final class LayerVideoView: NSView {
+    let player = AVPlayer()
+    private let playerLayer = AVPlayerLayer()
     var onFinished: (() -> Void)?
-    var endObserver: NSObjectProtocol?
-    private var didStart = false
+    private var started = false
+    private var observer: NSObjectProtocol?
 
-    func begin() {
-        guard !didStart, window != nil else { return }
-        guard let url = IntroClip.url() else {
-            DispatchQueue.main.async { self.onFinished?() }
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer = CALayer()
+        layer?.backgroundColor = NSColor.black.cgColor
+        playerLayer.player = player
+        playerLayer.videoGravity = .resizeAspectFill
+        layer?.addSublayer(playerLayer)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func layout() {
+        super.layout()
+        playerLayer.frame = bounds
+        if bounds.width > 8, bounds.height > 8 {
+            startIfNeeded()
+        }
+    }
+
+    func startIfNeeded() {
+        guard bounds.width > 8, bounds.height > 8 else { return }
+        if started {
+            if player.timeControlStatus != .playing { player.playImmediately(atRate: 1) }
             return
         }
-        didStart = true
+        guard let url = IntroClip.url() else {
+            DispatchQueue.main.async { [weak self] in self?.onFinished?() }
+            return
+        }
+        started = true
         let item = AVPlayerItem(url: url)
-        let player = AVPlayer(playerItem: item)
-        player.automaticallyWaitsToMinimizeStalling = false
-        self.player = player
-        endObserver = NotificationCenter.default.addObserver(
+        player.replaceCurrentItem(with: item)
+        observer = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
             queue: .main
         ) { [weak self] _ in
             self?.onFinished?()
         }
-        player.play()
+        player.playImmediately(atRate: 1)
     }
 
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        begin()
+    deinit {
+        if let observer { NotificationCenter.default.removeObserver(observer) }
     }
 }
 
 struct IntroPlayer: NSViewRepresentable {
     var onFinished: () -> Void
 
-    func makeNSView(context: Context) -> IntroHostView {
-        let view = IntroHostView()
-        view.controlsStyle = .none
-        view.videoGravity = .resizeAspectFill
-        view.showsFullScreenToggleButton = false
+    func makeNSView(context: Context) -> LayerVideoView {
+        let view = LayerVideoView(frame: NSRect(x: 0, y: 0, width: 1280, height: 820))
         view.onFinished = onFinished
-        DispatchQueue.main.async { view.begin() }
         return view
     }
 
-    func updateNSView(_ nsView: IntroHostView, context: Context) {
+    func updateNSView(_ nsView: LayerVideoView, context: Context) {
         nsView.onFinished = onFinished
-        nsView.begin()
+        nsView.startIfNeeded()
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: LayerVideoView, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 1280, height: proposal.height ?? 820)
     }
 }
