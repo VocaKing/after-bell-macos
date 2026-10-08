@@ -45,18 +45,20 @@ enum IntroClip {
     static let byteCount = 11578300
 
     static func url() -> URL? {
-        if let bundled = Bundle.main.url(forResource: "Intro", withExtension: "mp4"),
-           let size = try? bundled.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-           size == byteCount {
-            return bundled
+        let bundled = Bundle.main.urls(forResourcesWithExtension: "mp4", subdirectory: nil) ?? []
+        if let newest = bundled.max(by: { a, b in
+            let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            if da != db { return da < db }
+            return a.lastPathComponent > b.lastPathComponent
+        }) {
+            return newest
         }
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("AfterBellIntro.mp4")
-        let existing = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? NSNumber)?.intValue ?? 0
-        if existing != byteCount {
-            guard let data = Data(base64Encoded: parts.joined(), options: .ignoreUnknownCharacters),
-                  data.count == byteCount else { return nil }
-            do { try data.write(to: file, options: .atomic) } catch { return nil }
-        }
+        try? FileManager.default.removeItem(at: file)
+        guard let data = Data(base64Encoded: parts.joined(), options: .ignoreUnknownCharacters),
+              data.count == byteCount else { return nil }
+        do { try data.write(to: file, options: .atomic) } catch { return nil }
         return file
     }
 
