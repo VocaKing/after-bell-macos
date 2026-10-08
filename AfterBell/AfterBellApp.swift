@@ -45,21 +45,24 @@ enum IntroClip {
     static let byteCount = 11578300
 
     static func url() -> URL? {
-        let bundled = Bundle.main.urls(forResourcesWithExtension: "mp4", subdirectory: nil) ?? []
-        if let newest = bundled.max(by: { a, b in
+        let root = URL(fileURLWithPath: #file).deletingLastPathComponent()
+        let folders = [root, root.deletingLastPathComponent()]
+        var found: [URL] = []
+        for folder in folders {
+            guard let items = try? FileManager.default.contentsOfDirectory(
+                at: folder,
+                includingPropertiesForKeys: [.contentModificationDateKey]
+            ) else { continue }
+            found.append(contentsOf: items.filter { $0.pathExtension.lowercased() == "mp4" })
+        }
+        if let bundled = Bundle.main.urls(forResourcesWithExtension: "mp4", subdirectory: nil) {
+            found.append(contentsOf: bundled)
+        }
+        return found.max { a, b in
             let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
             let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            if da != db { return da < db }
-            return a.lastPathComponent > b.lastPathComponent
-        }) {
-            return newest
+            return da < db
         }
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("AfterBellIntro.mp4")
-        try? FileManager.default.removeItem(at: file)
-        guard let data = Data(base64Encoded: parts.joined(), options: .ignoreUnknownCharacters),
-              data.count == byteCount else { return nil }
-        do { try data.write(to: file, options: .atomic) } catch { return nil }
-        return file
     }
 
     static let parts: [String] = [
