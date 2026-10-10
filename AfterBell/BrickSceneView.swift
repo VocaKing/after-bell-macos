@@ -251,7 +251,7 @@ struct BrickSceneView: NSViewRepresentable {
             lastTime = time
             let hovering = trackingHover || swiftHover
             if hovering != wasHovering {
-                if hovering { hoverTime = 0.12 }
+                if hovering { hoverTime = 0 }
                 wasHovering = hovering
             }
             hoverTime += dt
@@ -780,18 +780,30 @@ struct JellyMesh {
             let dx = r.x - rope.x
             let dy = r.y - rope.y
             let ropeDist = simd_length(SIMD2(dx, dy))
-            let lagged = max(0, hoverTime - ropeDist * 0.1)
-            let arrive = 1 - exp(-lagged * 26)
-            let sway = sin(lagged * 16) * exp(-lagged * 2.2)
-            let center = exp(-(dx * dx + dy * dy) * 2.1)
-            let pull = env * arrive * 0.7 * center + env * sway * 0.03 * center
+            let lagged = max(0, hoverTime - ropeDist * 0.08)
+            let arrive = 1 - exp(-lagged * 18)
+            let center = exp(-(dx * dx + dy * dy) * 2.4)
+            let jelly = sin(hoverTime * 14) * exp(-hoverTime * 2.6) * env
+            let wide = 1 + jelly * 0.14
+            let deep = 1 - jelly * 0.2
             let cam = SIMD3<Float>(-0.1, 0.55, 3.1)
             let toward = simd_normalize(cam - r)
-            var t = r + toward * pull
+            var t = SIMD3<Float>(r.x * wide, r.y * wide, r.z * deep)
+            t += toward * (env * 0.08 + env * arrive * 0.38 * center)
+            let press = exp(-clickAge * 16)
+            t -= toward * press * clickAmp * 0.42
             let cd = simd_length(SIMD2(r.x - click.x, r.y - click.y))
-            let radius = clickAge * 2.4
-            let ring = exp(-(cd - radius) * (cd - radius) * 36) * exp(-clickAge * 0.65)
-            t += toward * ring * clickAmp * 0.9
+            let radius = max(0, clickAge - 0.05) * 2.5
+            let ring = exp(-(cd - radius) * (cd - radius) * 34) * exp(-clickAge * 0.85)
+            t += toward * ring * clickAmp * 0.7
+            let rebound = sin(max(0, clickAge - 0.05) * 20) * exp(-clickAge * 4.2)
+            let flat = SIMD2<Float>(r.x, r.y)
+            let flatLen = simd_length(flat)
+            if flatLen > 0.02 {
+                t.x += r.x / flatLen * rebound * clickAmp * 0.07
+                t.y += r.y / flatLen * rebound * clickAmp * 0.07
+            }
+            t.z -= rebound * clickAmp * 0.05
             target[i] = t
         }
         for i in 0..<n {
